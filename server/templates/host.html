@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Game - Party Games Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+        }
+        .player-list {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+        }
+        #qrCode {
+            max-width: 200px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-8">
+        <div class="game-container p-8 max-w-4xl mx-auto">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-indigo-600 mb-4">Game Room</h1>
+                <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="text-center">
+                    <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
+                    <img id="qrCode" src="/static/qr_{{ room_id }}.png" alt="QR Code" class="mb-4">
+                </div>
+
+                <div>
+                    <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
+                    <div id="playerList" class="player-list p-4 min-h-[200px]">
+                        <p class="text-gray-500">Waiting for players to join...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <button onclick="startGame('chinese_whispers')" 
+                        class="bg-indigo-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-indigo-700 transition">
+                    Start Drawing Game
+                </button>
+                <button onclick="startGame('trivia')" 
+                        class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition">
+                    Start Trivia Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const roomId = "{{ room_id }}";
+
+        socket.on('connect', () => {
+            socket.emit('join_room', { room_id: roomId, player_name: 'Host' });
+        });
+
+        socket.on('player_joined', (data) => {
+            updatePlayerList(data.players);
+        });
+
+        socket.on('player_left', (data) => {
+            updatePlayerList(data.players);
+        });
+
+        function updatePlayerList(players) {
+            const playerList = document.getElementById('playerList');
+            if (players.length === 0) {
+                playerList.innerHTML = '<p class="text-gray-500">Waiting for players to join...</p>';
+            } else {
+                playerList.innerHTML = players
+                    .map(player => `<div class="bg-white p-2 mb-2 rounded shadow">${player}</div>`)
+                    .join('');
+            }
+        }
+
+        function startGame(gameType) {
+            socket.emit('start_game', { room_id: roomId, game_type: gameType });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Party Games Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .game-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            transition: transform 0.3s ease;
+        }
+        .game-card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center">
+    <div class="container mx-auto px-4 py-8">
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-white mb-4">Party Games Hub</h1>
+            <p class="text-xl text-white opacity-90">Fun multiplayer games for everyone!</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <a href="/host" class="game-card p-6 shadow-lg">
+                <h2 class="text-2xl font-bold mb-4 text-indigo-600">Host a Game</h2>
+                <p class="text-gray-600">Create a new game room and invite your friends to join!</p>
+            </div>
+            
+            <div class="game-card p-6 shadow-lg">
+                <h2 class="text-2xl font-bold mb-4 text-indigo-600">Join a Game</h2>
+                <form action="/join" method="GET" class="space-y-4">
+                    <input type="text" name="room_id" placeholder="Enter Room Code" 
+                           class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <button type="submit" 
+                            class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition">
+                        Join Game
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

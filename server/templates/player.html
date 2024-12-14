@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Play Game - Party Games Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+        }
+        #canvas {
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            touch-action: none;
+        }
+        .drawing-controls {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .color-picker {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-8">
+        <div class="game-container p-8 max-w-4xl mx-auto">
+            <!-- Player Name Input -->
+            <div id="nameInput" class="text-center mb-8">
+                <h2 class="text-2xl font-bold text-indigo-600 mb-4">Enter Your Name</h2>
+                <input type="text" id="playerName" 
+                       class="w-64 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                       placeholder="Your name">
+                <button onclick="joinGame()" 
+                        class="ml-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition">
+                    Join
+                </button>
+            </div>
+
+            <!-- Game Area -->
+            <div id="gameArea" class="hidden">
+                <!-- Drawing Game -->
+                <div id="drawingGame" class="hidden">
+                    <h2 class="text-2xl font-bold text-indigo-600 mb-4">Draw: <span id="wordToDraw"></span></h2>
+                    <div class="drawing-controls">
+                        <input type="color" id="colorPicker" class="color-picker">
+                        <input type="range" id="brushSize" min="1" max="20" value="5">
+                        <button onclick="clearCanvas()" 
+                                class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition">
+                            Clear
+                        </button>
+                    </div>
+                    <canvas id="canvas" width="600" height="400" class="mx-auto bg-white"></canvas>
+                    <button onclick="submitDrawing()" 
+                            class="mt-4 bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600 transition">
+                        Submit Drawing
+                    </button>
+                </div>
+
+                <!-- Trivia Game -->
+                <div id="triviaGame" class="hidden">
+                    <h2 class="text-2xl font-bold text-indigo-600 mb-4">Trivia Question</h2>
+                    <div id="questionContainer" class="mb-4"></div>
+                    <div id="optionsContainer" class="space-y-2"></div>
+                </div>
+
+                <!-- Guessing Phase -->
+                <div id="guessingPhase" class="hidden">
+                    <h2 class="text-2xl font-bold text-indigo-600 mb-4">What was the original word?</h2>
+                    <div id="drawingsDisplay" class="grid grid-cols-2 gap-4 mb-4"></div>
+                    <input type="text" id="guessInput" 
+                           class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                           placeholder="Your guess">
+                    <button onclick="submitGuess()" 
+                            class="mt-2 bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 transition">
+                        Submit Guess
+                    </button>
+                </div>
+
+                <!-- Scoreboard -->
+                <div id="scoreboard" class="mt-8">
+                    <h3 class="text-xl font-bold text-indigo-600 mb-2">Scores</h3>
+                    <div id="scoreList" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const roomId = "{{ room_id }}";
+        let canvas, ctx;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Canvas setup
+        function setupCanvas() {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+            
+            // Touch events
+            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('touchmove', handleTouch);
+            canvas.addEventListener('touchend', stopDrawing);
+        }
+
+        function handleTouch(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 'mousemove', {
+                clientX: touch.clientX - rect.left,
+                clientY: touch.clientY - rect.top
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.strokeStyle = document.getElementById('colorPicker').value;
+            ctx.lineWidth = document.getElementById('brushSize').value;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX, e.offsetY];
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function joinGame() {
+            const playerName = document.getElementById('playerName').value;
+            if (!playerName) return;
+            
+            socket.emit('join_room', { room_id: roomId, player_name: playerName });
+            document.getElementById('nameInput').classList.add('hidden');
+            document.getElementById('gameArea').classList.remove('hidden');
+            setupCanvas();
+        }
+
+        socket.on('game_started', (data) => {
+            if (data.game_type === 'chinese_whispers') {
+                document.getElementById('drawingGame').classList.remove('hidden');
+                document.getElementById('triviaGame').classList.add('hidden');
+                document.getElementById('wordToDraw').textContent = data.word;
+            } else if (data.game_type === 'trivia') {
+                document.getElementById('drawingGame').classList.add('hidden');
+                document.getElementById('triviaGame').classList.remove('hidden');
+            }
+        });
+
+        socket.on('trivia_question', (data) => {
+            const questionContainer = document.getElementById('questionContainer');
+            const optionsContainer = document.getElementById('optionsContainer');
+            
+            questionContainer.textContent = data.question;
+            optionsContainer.innerHTML = data.options
+                .map(option => `
+                    <button onclick="submitTrivia('${option}')"
+                            class="w-full bg-indigo-100 text-indigo-700 p-3 rounded hover:bg-indigo-200 transition">
+                        ${option}
+                    </button>
+                `).join('');
+        });
+
+        function submitDrawing() {
+            const drawingData = canvas.toDataURL();
+            socket.emit('submit_drawing', {
+                room_id: roomId,
+                drawing: drawingData
+            });
+            document.getElementById('drawingGame').classList.add('hidden');
+        }
+
+        socket.on('all_drawings_complete', (data) => {
+            document.getElementById('guessingPhase').classList.remove('hidden');
+            const drawingsDisplay = document.getElementById('drawingsDisplay');
+            drawingsDisplay.innerHTML = data.drawings
+                .map(d => `<img src="${d.drawing}" alt="Player drawing" class="w-full">`)
+                .join('');
+        });
+
+        function submitGuess() {
+            const guess = document.getElementById('guessInput').value;
+            socket.emit('submit_guess', {
+                room_id: roomId,
+                guess: guess
+            });
+        }
+
+        socket.on('guess_result', (data) => {
+            updateScoreboard(data.scores);
+        });
+
+        function updateScoreboard(scores) {
+            const scoreList = document.getElementById('scoreList');
+            scoreList.innerHTML = Object.entries(scores)
+                .map(([player, score]) => `
+                    <div class="bg-white p-2 rounded shadow">
+                        <span class="font-bold">${player}:</span> ${score}
+                    </div>
+                `).join('');
+        }
+    </script>
+</body>
+</html>
