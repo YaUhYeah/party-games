@@ -582,6 +582,22 @@
             showNotification('Connected to server', 'success');
         });
 
+        socket.on('chase_cancelled', (data) => {
+            showNotification(data.reason, 'error');
+            document.getElementById('chaseGame').classList.add('hidden');
+            document.getElementById('chaseSetup').classList.remove('hidden');
+            document.getElementById('chaseQuestion').classList.add('hidden');
+            document.getElementById('categorySelect').classList.add('hidden');
+        });
+
+        socket.on('game_cancelled', (data) => {
+            showNotification(data.reason, 'error');
+            document.getElementById('drawingGame').classList.add('hidden');
+            document.getElementById('triviaGame').classList.add('hidden');
+            document.getElementById('chaseGame').classList.add('hidden');
+            document.getElementById('guessingPhase').classList.add('hidden');
+        });
+
         socket.on('error', (data) => {
             showNotification(data.message, 'error');
             playSound('error');

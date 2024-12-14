@@ -1115,22 +1115,52 @@ async def disconnect(sid):
     print(f"Client disconnected: {sid}")
     for room in rooms.values():
         if sid in room.players:
+            player_data = room.players[sid]
             # Mark player as disconnected instead of removing
-            room.players[sid]['connected'] = False
+            player_data['connected'] = False
+            
+            # Handle special cases based on game state
+            if room.current_game == 'chase':
+                if sid == room.chaser:
+                    # Chaser disconnected, reset chase game
+                    room.chaser = None
+                    room.chase_category = None
+                    room.chase_contestant = None
+                    room.game_state = 'waiting'
+                    await sio.emit('chase_cancelled', {
+                        'reason': 'Chaser disconnected'
+                    }, room=room.room_id)
+                elif sid == room.chase_contestant:
+                    # Contestant disconnected, reset current chase
+                    room.chase_contestant = None
+                    room.game_state = 'chase_setup'
+                    await sio.emit('chase_cancelled', {
+                        'reason': 'Contestant disconnected'
+                    }, room=room.room_id)
             
             # Update player list for all clients
             player_list = []
-            for player_sid, player_data in room.players.items():
-                if player_data['connected']:  # Only include connected players
+            for p_sid, p_data in room.players.items():
+                if p_data['connected'] and not p_data.get('is_host'):  # Only include connected non-host players
                     player_list.append({
-                        'name': player_data['name'],
-                        'score': player_data['score']
+                        'name': p_data['name'],
+                        'score': p_data.get('score', 0)
                     })
             
             await sio.emit('player_left', {
                 'players': player_list,
-                'disconnected_player': room.players[sid]['name']
+                'disconnected_player': player_data['name']
             }, room=room.room_id)
+            
+            # If not enough players, end the game
+            active_players = sum(1 for p in room.players.values() 
+                               if p['connected'] and not p.get('is_host'))
+            if active_players < 2:  # Minimum 2 players for any game
+                room.game_state = 'waiting'
+                room.current_game = None
+                await sio.emit('game_cancelled', {
+                    'reason': 'Not enough players'
+                }, room=room.room_id)
             
             # If it was this player's turn in drawing game, move to next player
             if (room.game_state == 'playing' and 

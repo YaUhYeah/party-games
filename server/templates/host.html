@@ -171,7 +171,11 @@
         });
 
         socket.on('game_started', (data) => {
-            playMusic(data.game_type === 'chinese_whispers' ? 'drawing' : 'trivia');
+            if (data.game_type === 'chase') {
+                playMusic('chase');
+            } else {
+                playMusic(data.game_type === 'chinese_whispers' ? 'drawing' : 'trivia');
+            }
             updateGameState(data);
         });
 
@@ -295,6 +299,18 @@
             `;
         });
 
+        socket.on('chase_cancelled', (data) => {
+            showError(data.reason);
+            playMusic('lobby');
+            updateGameState({ game_type: 'waiting' });
+        });
+
+        socket.on('game_cancelled', (data) => {
+            showError(data.reason);
+            playMusic('lobby');
+            updateGameState({ game_type: 'waiting' });
+        });
+
         socket.on('error', (data) => {
             showError(data.message);
             playSound('error');
@@ -319,36 +335,77 @@
 
         function updateGameState(data) {
             const gameArea = document.querySelector('.game-container');
-            gameArea.innerHTML = `
-                <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-indigo-600">
-                        ${data.game_type === 'chinese_whispers' ? 'Drawing Game' : 'Trivia Game'}
-                    </h2>
-                    <p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>
-                </div>
-                <div id="timer" class="mb-4 text-center">
-                    <div class="relative pt-1">
-                        <div class="flex mb-2 items-center justify-between">
-                            <div class="text-xl font-semibold text-indigo-600">
-                                <span id="timerText">Time Remaining</span>
-                            </div>
-                            <div class="text-right">
-                                <span id="timerValue" class="text-xl font-semibold text-indigo-800">
-                                    60s
-                                </span>
-                            </div>
+            
+            if (data.game_type === 'waiting') {
+                gameArea.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h1 class="text-3xl font-bold text-indigo-600 mb-4">Game Room</h1>
+                        <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="text-center">
+                            <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
+                            <img id="qrCode" src="/static/qr_{{ room_id }}.png" alt="QR Code" class="mb-4">
                         </div>
-                        <div class="overflow-hidden h-4 mb-4 text-xs flex rounded bg-indigo-200">
-                            <div id="timerBar" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500" style="width: 100%"></div>
+
+                        <div>
+                            <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
+                            <div id="playerList" class="player-list p-4 min-h-[200px]">
+                                <p class="text-gray-500">Waiting for players to join...</p>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div id="gameContent" class="mb-8 bg-white p-6 rounded-lg shadow-lg"></div>
-                <div id="leaderboard" class="mt-8">
-                    <h3 class="text-xl font-bold text-indigo-600 mb-4">Leaderboard</h3>
-                    <div id="leaderboardContent" class="space-y-2"></div>
-                </div>
-            `;
+
+                    <div class="mt-8 text-center">
+                        <button onclick="startGame('chinese_whispers')" 
+                                class="bg-indigo-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-indigo-700 transition">
+                            Start Drawing Game
+                        </button>
+                        <button onclick="startGame('trivia')" 
+                                class="bg-purple-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-purple-700 transition">
+                            Start Trivia Game
+                        </button>
+                        <button onclick="startGame('chase')" 
+                                class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition">
+                            Start Chase Game
+                        </button>
+                    </div>
+                `;
+            } else {
+                gameArea.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-bold text-indigo-600">
+                            ${data.game_type === 'chinese_whispers' ? 'Drawing Game' : 
+                              data.game_type === 'trivia' ? 'Trivia Game' : 'The Chase'}
+                        </h2>
+                        ${data.game_type !== 'chase' ? 
+                          `<p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>` : ''}
+                    </div>
+                    <div id="timer" class="mb-4 text-center">
+                        <div class="relative pt-1">
+                            <div class="flex mb-2 items-center justify-between">
+                                <div class="text-xl font-semibold text-indigo-600">
+                                    <span id="timerText">Time Remaining</span>
+                                </div>
+                                <div class="text-right">
+                                    <span id="timerValue" class="text-xl font-semibold text-indigo-800">
+                                        60s
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="overflow-hidden h-4 mb-4 text-xs flex rounded bg-indigo-200">
+                                <div id="timerBar" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="gameContent" class="mb-8 bg-white p-6 rounded-lg shadow-lg"></div>
+                    <div id="leaderboard" class="mt-8">
+                        <h3 class="text-xl font-bold text-indigo-600 mb-4">Leaderboard</h3>
+                        <div id="leaderboardContent" class="space-y-2"></div>
+                    </div>
+                `;
+            }
         }
 
         function updateRoundInfo(data) {
