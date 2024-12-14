@@ -5,12 +5,14 @@ import json
 import qrcode
 import asyncio
 import base64
+import socket
 from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import FastAPI, WebSocket, HTTPException, Depends, File, UploadFile, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from sqlalchemy.orm import Session
 # Game configuration
@@ -84,8 +86,33 @@ TRIVIA_QUESTIONS = [
 from database import get_db, User, GameScore, Achievement
 
 app = FastAPI()
-sio = socketio.AsyncServer(async_mode='asgi')
-socket_app = socketio.ASGIApp(sio, app)
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
+
+# Configure CORS for Socket.IO
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    cors_allowed_origins='*',  # Allow connections from any origin
+    ping_timeout=35,
+    ping_interval=25,
+    max_http_buffer_size=1e8  # 100MB max message size
+)
+
+# Create Socket.IO ASGI app
+socket_app = socketio.ASGIApp(
+    sio,
+    app,
+    static_files={
+        '/': {'content_type': 'text/html', 'filename': 'index.html'}
+    }
+)
 
 # Mount static files and templates
 # Get the absolute path to the server directory
@@ -308,8 +335,20 @@ async def host_game(request: Request):
     room_id = ''.join(random.choices('0123456789', k=6))
     rooms[room_id] = GameRoom(room_id)
     
-    # Get the host from the request headers
-    host = request.headers.get('host', 'localhost:8000')
+    # Get local IP address
+    def get_local_ip():
+        try:
+            # Create a socket connection to an external server to get local IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "localhost"
+
+    local_ip = get_local_ip()
+    host = f"{local_ip}:8000"
     
     # Generate QR code
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -664,6 +703,33 @@ async def disconnect(sid):
                 } for p in room.players.values()]
             }, room=room.room_id)
 
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "localhost"
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:socket_app", host="0.0.0.0", port=8000, reload=True)
+    
+    local_ip = get_local_ip()
+    print(f"\nServer running on:")
+    print(f"Local:   http://localhost:8000")
+    print(f"Network: http://{local_ip}:8000")
+    print("\nShare these URLs with players:")
+    print(f"1. Local players:  http://localhost:8000")
+    print(f"2. Network/Mobile: http://{local_ip}:8000")
+    print("\nPress CTRL+C to quit\n")
+    
+    uvicorn.run(
+        "main:socket_app",
+        host="0.0.0.0",  # Listen on all network interfaces
+        port=8000,
+        reload=True,
+        reload_excludes=["*.log", "*.db"],  # Don't reload on log or database changes
+        log_level="info"
+    )
