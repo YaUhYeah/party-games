@@ -13,21 +13,93 @@ A collection of fun multiplayer party games including Drawing Chinese Whispers a
 
 ## Setup and Installation
 
-1. Install the required dependencies:
-```bash
-cd server
-pip install -r requirements.txt
-```
+### Easy Setup (Recommended)
+
+#### Windows:
+1. Download and install Python 3.7+ from [python.org](https://www.python.org/downloads/)
+   - Make sure to check "Add Python to PATH" during installation
+2. Double-click `setup.bat`
+3. Follow the instructions shown in the terminal
+
+#### Linux/macOS:
+1. Open terminal in the project directory
+2. Make the setup script executable:
+   ```bash
+   chmod +x setup.sh
+   ```
+3. Run the setup script:
+   ```bash
+   ./setup.sh
+   ```
+4. Follow the instructions shown in the terminal
+
+### Manual Setup
+
+If the automatic setup doesn't work, follow these steps:
+
+1. Install Python 3.7+ from [python.org](https://www.python.org/downloads/)
+
+2. Create and activate a virtual environment:
+   ```bash
+   # Windows
+   python -m venv venv
+   venv\Scripts\activate
+
+   # Linux/macOS
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   python -m pip install -r server/requirements.txt
+   ```
+
+4. Create necessary directories:
+   ```bash
+   mkdir -p server/static/music
+   ```
+
+### Starting the Server
+
+1. Activate the virtual environment (if not already activated):
+   ```bash
+   # Windows
+   venv\Scripts\activate
+
+   # Linux/macOS
+   source venv/bin/activate
+   ```
 
 2. Start the server:
-```bash
-python main.py
-```
+   ```bash
+   python server/main.py
+   ```
 
 3. Open a web browser and navigate to:
-```
-http://localhost:8000
-```
+   ```
+   http://localhost:8000
+   ```
+
+### Troubleshooting
+
+If you get a "pip not recognized" error:
+1. Make sure Python is installed and added to PATH
+2. Try using `python -m pip` instead of just `pip`
+3. On Linux/macOS, try `python3` and `pip3` instead
+
+If you get a "module not found" error:
+1. Make sure you're in the virtual environment (you should see `(venv)` in your terminal)
+2. Try reinstalling the requirements:
+   ```bash
+   python -m pip install --force-reinstall -r server/requirements.txt
+   ```
+
+For other issues, make sure:
+1. All commands are run from the project root directory
+2. Python 3.7+ is installed (`python --version` to check)
+3. Virtual environment is activated
+4. All requirements are installed correctly
 
 4. To host a game:
    - Click "Host a Game"
