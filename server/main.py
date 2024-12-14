@@ -7,7 +7,7 @@ import asyncio
 import base64
 from datetime import datetime
 from typing import Dict, List, Optional
-from fastapi import FastAPI, WebSocket, HTTPException, Depends, File, UploadFile
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, File, UploadFile, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -230,20 +230,23 @@ async def get_achievements(username: str, db: Session = Depends(get_db)):
     } for achievement in achievements]
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request):
+async def home(request: Request):
     return templates.TemplateResponse(
         "index.html",
         {"request": request}
     )
 
-@app.get("/host")
-async def host_game(request):
+@app.get("/host", response_class=HTMLResponse)
+async def host_game(request: Request):
     room_id = ''.join(random.choices('0123456789', k=6))
     rooms[room_id] = GameRoom(room_id)
     
+    # Get the host from the request headers
+    host = request.headers.get('host', 'localhost:8000')
+    
     # Generate QR code
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(f'http://{request.client.host}:8000/join/{room_id}')
+    qr.add_data(f'http://{host}/join/{room_id}')
     qr.make(fit=True)
     qr_image = qr.make_image(fill_color="black", back_color="white")
     qr_path = os.path.join(STATIC_DIR, f'qr_{room_id}.png')
@@ -254,10 +257,13 @@ async def host_game(request):
         {"request": request, "room_id": room_id}
     )
 
-@app.get("/join/{room_id}")
-async def join_game(request, room_id: str):
+@app.get("/join/{room_id}", response_class=HTMLResponse)
+async def join_game(request: Request, room_id: str):
     if room_id not in rooms:
-        return {"error": "Room not found"}
+        return templates.TemplateResponse(
+            "error.html",
+            {"request": request, "error": "Room not found"}
+        )
     return templates.TemplateResponse(
         "player.html",
         {"request": request, "room_id": room_id}
