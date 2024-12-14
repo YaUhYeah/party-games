@@ -179,6 +179,29 @@
             updateGameState(data);
         });
 
+        socket.on('chase_setup', (data) => {
+            updateGameState({ game_type: 'chase' });
+            const gameContent = document.getElementById('gameContent');
+            if (gameContent) {
+                gameContent.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+                        <h3 class="text-2xl font-bold mb-4">The Chase</h3>
+                        <p class="text-lg mb-4">Waiting for players to choose roles...</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 bg-gray-100 rounded-lg">
+                                <h4 class="font-bold mb-2">Chaser</h4>
+                                <p id="chaserName" class="text-gray-600">Waiting...</p>
+                            </div>
+                            <div class="p-4 bg-gray-100 rounded-lg">
+                                <h4 class="font-bold mb-2">Category</h4>
+                                <p id="chaseCategory" class="text-gray-600">Not selected</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
         socket.on('round_start', (data) => {
             playSound('round_start');
             updateRoundInfo(data);
@@ -197,26 +220,6 @@
         socket.on('game_over', (data) => {
             playMusic('game_over');
             showGameResults(data);
-        });
-
-        socket.on('chase_setup', (data) => {
-            const gameContent = document.getElementById('gameContent');
-            gameContent.innerHTML = `
-                <div class="bg-white p-6 rounded-lg shadow-lg text-center">
-                    <h3 class="text-2xl font-bold mb-4">The Chase</h3>
-                    <p class="text-lg mb-4">Waiting for players to choose roles...</p>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="p-4 bg-gray-100 rounded-lg">
-                            <h4 class="font-bold mb-2">Chaser</h4>
-                            <p id="chaserName" class="text-gray-600">Waiting...</p>
-                        </div>
-                        <div class="p-4 bg-gray-100 rounded-lg">
-                            <h4 class="font-bold mb-2">Category</h4>
-                            <p id="chaseCategory" class="text-gray-600">Not selected</p>
-                        </div>
-                    </div>
-                </div>
-            `;
         });
 
         socket.on('chase_started', (data) => {
@@ -379,7 +382,7 @@
                             ${data.game_type === 'chinese_whispers' ? 'Drawing Game' : 
                               data.game_type === 'trivia' ? 'Trivia Game' : 'The Chase'}
                         </h2>
-                        ${data.game_type !== 'chase' ? 
+                        ${data.game_type !== 'chase' && data.round ? 
                           `<p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>` : ''}
                     </div>
                     <div id="timer" class="mb-4 text-center">
@@ -498,7 +501,10 @@
         }
 
         function startGame(gameType) {
-            socket.emit('start_game', { room_id: roomId, game_type: gameType });
+            socket.emit('start_game', { 
+                room_id: roomId, 
+                game_type: gameType 
+            });
         }
     </script>
 </body>

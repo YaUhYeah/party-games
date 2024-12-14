@@ -589,10 +589,18 @@ async def join_room(sid, data):
             await sio.enter_room(sid, room_id)
             return
         
-        # Check if player is already in the room (rejoin case)
+        # Check if username is taken by an active player
+        for s, p in room.players.items():
+            if not p.get('is_host') and p['name'] == player_name and p['connected']:
+                await sio.emit('error', {
+                    'message': 'Username already taken'
+                }, room=sid)
+                return
+        
+        # Check if it's a rejoin case
         existing_sid = None
         for s, p in room.players.items():
-            if not p.get('is_host') and p['name'] == player_name:
+            if not p.get('is_host') and p['name'] == player_name and not p['connected']:
                 existing_sid = s
                 break
         
