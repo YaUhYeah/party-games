@@ -206,21 +206,9 @@
         let selectedAnswer = null;
 
         // Audio management
-        function playMusic(type) {
-            if (currentMusic !== type) {
-                gameAudio.src = `/static/music/${type}.mp3`;
-                gameAudio.loop = true;
-                gameAudio.volume = 0.5;
-                gameAudio.play();
-                currentMusic = type;
-            }
-        }
-
-        function playSound(type) {
-            const sound = new Audio(`/static/music/${type}.mp3`);
-            sound.volume = 0.6;
-            sound.play();
-        }
+        // No sound effects on client side - all sounds come from host TV
+        function playMusic(type) {}
+        function playSound(type) {}
 
         // Timer management
         function startTimer(duration) {

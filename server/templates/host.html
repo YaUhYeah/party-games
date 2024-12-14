@@ -6,6 +6,49 @@
     <title>Host Game - Party Games Hub</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <style>
+        /* TV Mode Styles */
+        .tv-mode {
+            background: #000 !important;
+            color: #fff !important;
+        }
+        .tv-mode .game-container {
+            background: rgba(0, 0, 0, 0.8) !important;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        .tv-mode .player-list {
+            background: rgba(0, 0, 0, 0.5) !important;
+        }
+        .tv-mode .text-gray-500 {
+            color: rgba(255, 255, 255, 0.6) !important;
+        }
+        .tv-mode #qrCode {
+            filter: invert(1);
+        }
+        
+        /* Fullscreen button */
+        .fullscreen-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+        }
+        
+        /* Hide cursor in TV mode after inactivity */
+        .hide-cursor {
+            cursor: none !important;
+        }
+        
+        /* Animations */
+        @keyframes playerJoin {
+            0% { transform: translateX(-20px); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+        .player-join {
+            animation: playerJoin 0.3s ease-out forwards;
+        }
+    </style>
     <style>
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
