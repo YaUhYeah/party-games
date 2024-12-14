@@ -10,20 +10,30 @@
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, sans-serif;
         }
         .game-container {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         #canvas {
             border: 2px solid #ccc;
             border-radius: 10px;
             touch-action: none;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .drawing-controls {
             display: flex;
             gap: 10px;
             margin: 10px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
         }
         .color-picker {
             width: 40px;
@@ -31,6 +41,89 @@
             border: none;
             border-radius: 50%;
             cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .color-picker:hover {
+            transform: scale(1.1);
+        }
+        .brush-size {
+            width: 100px;
+        }
+        .timer {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4a5568;
+            text-align: center;
+            margin: 10px 0;
+            padding: 5px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        .timer.warning {
+            color: #c53030;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .game-button {
+            background: #4f46e5;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .game-button:hover {
+            background: #4338ca;
+            transform: translateY(-1px);
+        }
+        .game-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .answer-option {
+            background: white;
+            border: 2px solid #e5e7eb;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .answer-option:hover {
+            border-color: #4f46e5;
+            background: #f3f4f6;
+        }
+        .answer-option.selected {
+            border-color: #4f46e5;
+            background: #eef2ff;
+        }
+        .score-animation {
+            position: fixed;
+            font-size: 2rem;
+            font-weight: bold;
+            pointer-events: none;
+            animation: scoreFloat 1.5s ease-out forwards;
+        }
+        @keyframes scoreFloat {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+        }
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(0); }
         }
     </style>
 </head>
@@ -105,12 +198,80 @@
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
+        let gameAudio = new Audio();
+        let currentMusic = null;
+        let timerInterval = null;
+        let timeLeft = 0;
+        let isMyTurn = false;
+        let selectedAnswer = null;
 
-        // Canvas setup
+        // Audio management
+        function playMusic(type) {
+            if (currentMusic !== type) {
+                gameAudio.src = `/static/music/${type}.mp3`;
+                gameAudio.loop = true;
+                gameAudio.volume = 0.5;
+                gameAudio.play();
+                currentMusic = type;
+            }
+        }
+
+        function playSound(type) {
+            const sound = new Audio(`/static/music/${type}.mp3`);
+            sound.volume = 0.6;
+            sound.play();
+        }
+
+        // Timer management
+        function startTimer(duration) {
+            clearInterval(timerInterval);
+            timeLeft = duration;
+            updateTimerDisplay();
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                
+                if (timeLeft <= 5) {
+                    playSound('timer_tick');
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    if (isMyTurn) {
+                        autoSubmit();
+                    }
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const timerElement = document.getElementById('timer');
+            if (timerElement) {
+                timerElement.textContent = `Time: ${timeLeft}s`;
+                timerElement.classList.toggle('warning', timeLeft <= 5);
+            }
+        }
+
+        function autoSubmit() {
+            if (document.getElementById('drawingGame').classList.contains('active')) {
+                submitDrawing();
+            } else if (selectedAnswer) {
+                submitTrivia(selectedAnswer);
+            }
+        }
+
+        // Canvas setup and drawing functions
         function setupCanvas() {
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
             
+            // Set canvas size based on container
+            const container = canvas.parentElement;
+            canvas.width = Math.min(600, container.offsetWidth - 20);
+            canvas.height = Math.min(400, window.innerHeight * 0.6);
+            
+            // Event listeners
             canvas.addEventListener('mousedown', startDrawing);
             canvas.addEventListener('mousemove', draw);
             canvas.addEventListener('mouseup', stopDrawing);
@@ -120,6 +281,10 @@
             canvas.addEventListener('touchstart', handleTouch);
             canvas.addEventListener('touchmove', handleTouch);
             canvas.addEventListener('touchend', stopDrawing);
+            
+            // Set initial drawing style
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
         }
 
         function handleTouch(e) {
@@ -134,102 +299,261 @@
         }
 
         function startDrawing(e) {
+            if (!isMyTurn) return;
             isDrawing = true;
             [lastX, lastY] = [e.offsetX, e.offsetY];
+            // Start new path for each stroke
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
         }
 
         function draw(e) {
-            if (!isDrawing) return;
+            if (!isDrawing || !isMyTurn) return;
+            
+            const currentX = e.offsetX;
+            const currentY = e.offsetY;
+            
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.lineTo(currentX, currentY);
             ctx.strokeStyle = document.getElementById('colorPicker').value;
             ctx.lineWidth = document.getElementById('brushSize').value;
-            ctx.lineCap = 'round';
             ctx.stroke();
-            [lastX, lastY] = [e.offsetX, e.offsetY];
+            
+            [lastX, lastY] = [currentX, currentY];
+            
+            // Add smooth curve
+            ctx.quadraticCurveTo(lastX, lastY, currentX, currentY);
+            ctx.stroke();
         }
 
         function stopDrawing() {
             isDrawing = false;
+            ctx.closePath();
         }
 
         function clearCanvas() {
+            if (!isMyTurn) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            playSound('clear');
         }
 
+        // Game flow functions
         function joinGame() {
             const playerName = document.getElementById('playerName').value;
-            if (!playerName) return;
+            if (!playerName) {
+                showNotification('Please enter your name', 'error');
+                return;
+            }
             
             socket.emit('join_room', { room_id: roomId, player_name: playerName });
             document.getElementById('nameInput').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             setupCanvas();
+            playMusic('lobby');
         }
 
-        socket.on('game_started', (data) => {
-            if (data.game_type === 'chinese_whispers') {
-                document.getElementById('drawingGame').classList.remove('hidden');
-                document.getElementById('triviaGame').classList.add('hidden');
-                document.getElementById('wordToDraw').textContent = data.word;
-            } else if (data.game_type === 'trivia') {
-                document.getElementById('drawingGame').classList.add('hidden');
-                document.getElementById('triviaGame').classList.remove('hidden');
-            }
-        });
-
-        socket.on('trivia_question', (data) => {
-            const questionContainer = document.getElementById('questionContainer');
-            const optionsContainer = document.getElementById('optionsContainer');
-            
-            questionContainer.textContent = data.question;
-            optionsContainer.innerHTML = data.options
-                .map(option => `
-                    <button onclick="submitTrivia('${option}')"
-                            class="w-full bg-indigo-100 text-indigo-700 p-3 rounded hover:bg-indigo-200 transition">
-                        ${option}
-                    </button>
-                `).join('');
-        });
-
         function submitDrawing() {
+            if (!isMyTurn) return;
             const drawingData = canvas.toDataURL();
             socket.emit('submit_drawing', {
                 room_id: roomId,
                 drawing: drawingData
             });
-            document.getElementById('drawingGame').classList.add('hidden');
+            playSound('submit');
+            isMyTurn = false;
+            document.getElementById('drawingGame').classList.remove('active');
+            showNotification('Drawing submitted!', 'success');
         }
 
-        socket.on('all_drawings_complete', (data) => {
-            document.getElementById('guessingPhase').classList.remove('hidden');
-            const drawingsDisplay = document.getElementById('drawingsDisplay');
-            drawingsDisplay.innerHTML = data.drawings
-                .map(d => `<img src="${d.drawing}" alt="Player drawing" class="w-full">`)
-                .join('');
-        });
-
         function submitGuess() {
-            const guess = document.getElementById('guessInput').value;
+            const guessInput = document.getElementById('guessInput');
+            const guess = guessInput.value.trim();
+            if (!guess) {
+                showNotification('Please enter a guess', 'error');
+                return;
+            }
+            
             socket.emit('submit_guess', {
                 room_id: roomId,
                 guess: guess
             });
+            guessInput.value = '';
+            guessInput.disabled = true;
+            playSound('submit');
         }
 
+        function selectAnswer(option) {
+            if (selectedAnswer === option) return;
+            selectedAnswer = option;
+            document.querySelectorAll('.answer-option').forEach(el => {
+                el.classList.toggle('selected', el.dataset.option === option);
+            });
+        }
+
+        function submitTrivia(answer) {
+            socket.emit('submit_guess', {
+                room_id: roomId,
+                guess: answer
+            });
+            document.querySelectorAll('.answer-option').forEach(el => {
+                el.disabled = true;
+            });
+            playSound('submit');
+        }
+
+        // UI feedback functions
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        function showScoreAnimation(score, isCorrect) {
+            const animation = document.createElement('div');
+            animation.className = 'score-animation';
+            animation.style.color = isCorrect ? '#4CAF50' : '#F44336';
+            animation.textContent = isCorrect ? `+${score}` : '0';
+            animation.style.left = `${Math.random() * 80 + 10}%`;
+            document.body.appendChild(animation);
+            setTimeout(() => animation.remove(), 1500);
+        }
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            showNotification('Connected to server', 'success');
+        });
+
+        socket.on('error', (data) => {
+            showNotification(data.message, 'error');
+            playSound('error');
+        });
+
+        socket.on('game_started', (data) => {
+            playMusic(data.game_type === 'chinese_whispers' ? 'drawing' : 'trivia');
+            updateGameState(data);
+        });
+
+        socket.on('round_start', (data) => {
+            playSound('round_start');
+            updateRoundInfo(data);
+            startTimer(data.time_limit);
+        });
+
+        socket.on('next_player', (data) => {
+            isMyTurn = data.player === document.getElementById('playerName').value;
+            if (isMyTurn) {
+                playSound('your_turn');
+                showNotification('Your turn to draw!', 'info');
+                document.getElementById('drawingGame').classList.add('active');
+                startTimer(60);
+            }
+            updateGameState(data);
+        });
+
+        socket.on('time_up', () => {
+            if (isMyTurn) {
+                playSound('time_up');
+                autoSubmit();
+            }
+        });
+
         socket.on('guess_result', (data) => {
+            playSound(data.correct ? 'correct_answer' : 'wrong_answer');
+            showScoreAnimation(data.score, data.correct);
             updateScoreboard(data.scores);
         });
 
+        socket.on('game_over', (data) => {
+            playMusic('game_over');
+            showGameResults(data);
+        });
+
+        // UI update functions
+        function updateGameState(data) {
+            const gameArea = document.getElementById('gameArea');
+            if (data.game_type === 'chinese_whispers') {
+                gameArea.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-bold text-indigo-600">Drawing Game</h2>
+                        <p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>
+                        <div id="timer" class="timer"></div>
+                    </div>
+                    <div id="drawingGame" class="${isMyTurn ? 'active' : ''}">
+                        <div class="drawing-controls">
+                            <input type="color" id="colorPicker" class="color-picker">
+                            <input type="range" id="brushSize" min="1" max="20" value="5" class="brush-size">
+                            <button onclick="clearCanvas()" class="game-button">Clear</button>
+                        </div>
+                        <canvas id="canvas"></canvas>
+                        <button onclick="submitDrawing()" class="game-button mt-4 w-full">
+                            Submit Drawing
+                        </button>
+                    </div>
+                `;
+                setupCanvas();
+            } else {
+                // Trivia game UI
+                gameArea.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-bold text-indigo-600">Trivia Game</h2>
+                        <p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>
+                        <div id="timer" class="timer"></div>
+                    </div>
+                    <div id="triviaGame">
+                        <div id="questionContainer" class="text-xl mb-4"></div>
+                        <div id="optionsContainer" class="space-y-2"></div>
+                    </div>
+                `;
+            }
+        }
+
         function updateScoreboard(scores) {
             const scoreList = document.getElementById('scoreList');
-            scoreList.innerHTML = Object.entries(scores)
-                .map(([player, score]) => `
-                    <div class="bg-white p-2 rounded shadow">
-                        <span class="font-bold">${player}:</span> ${score}
+            if (!scoreList) return;
+            
+            scoreList.innerHTML = scores
+                .map((player, index) => `
+                    <div class="flex items-center justify-between p-2 ${
+                        index === 0 ? 'bg-yellow-100' : 'bg-white'
+                    } rounded shadow mb-2">
+                        <span class="font-bold">${index + 1}. ${player.name}</span>
+                        <span class="text-indigo-600">${player.score} points</span>
                     </div>
                 `).join('');
+        }
+
+        function showGameResults(data) {
+            const gameArea = document.getElementById('gameArea');
+            gameArea.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-3xl font-bold text-center text-indigo-600 mb-6">Game Over!</h2>
+                    <div class="max-w-md mx-auto">
+                        <h3 class="text-xl font-bold mb-4">Final Scores</h3>
+                        ${data.leaderboard.map((player, index) => `
+                            <div class="flex items-center justify-between p-3 ${
+                                index === 0 ? 'bg-yellow-100' : 'bg-gray-50'
+                            } rounded-lg mb-2">
+                                <div>
+                                    <span class="text-2xl font-bold mr-2">${index + 1}</span>
+                                    <span class="font-semibold">${player.name}</span>
+                                </div>
+                                <span class="text-xl font-bold text-indigo-600">
+                                    ${player.score} points
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="mt-8 text-center">
+                        <button onclick="location.reload()" 
+                                class="game-button">
+                            Play Again
+                        </button>
+                    </div>
+                </div>
+            `;
         }
     </script>
 </body>
