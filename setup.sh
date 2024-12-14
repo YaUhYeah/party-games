@@ -35,6 +35,7 @@ python3 -m pip install -r server/requirements.txt
 # Create necessary directories
 echo "Creating necessary directories..."
 mkdir -p server/static/music
+mkdir -p server/static/profiles
 
 echo "Setup complete! To start the server:"
 echo "1. Activate the virtual environment: source venv/bin/activate"

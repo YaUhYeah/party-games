@@ -58,7 +58,9 @@ python -m pip install "passlib[bcrypt]"
 
 REM Create necessary directories
 echo Creating necessary directories...
+mkdir server\static 2>nul
 mkdir server\static\music 2>nul
+mkdir server\static\profiles 2>nul
 
 echo.
 echo Setup complete! To start the server:
