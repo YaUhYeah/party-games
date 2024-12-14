@@ -169,6 +169,39 @@
                     <div id="optionsContainer" class="space-y-2"></div>
                 </div>
 
+                <!-- Chase Game -->
+                <div id="chaseGame" class="hidden">
+                    <h2 class="text-2xl font-bold text-indigo-600 mb-4">The Chase</h2>
+                    <div id="chaseSetup" class="mb-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="selectChaseRole('chaser')"
+                                    class="bg-red-600 text-white p-4 rounded-lg hover:bg-red-700 transition">
+                                Become the Chaser
+                            </button>
+                            <button onclick="selectChaseRole('contestant')"
+                                    class="bg-blue-600 text-white p-4 rounded-lg hover:bg-blue-700 transition">
+                                Take on the Chase
+                            </button>
+                        </div>
+                        <div id="categorySelect" class="hidden mt-4">
+                            <h3 class="text-lg font-bold mb-2">Select Category:</h3>
+                            <div id="categoryOptions" class="grid grid-cols-2 gap-2"></div>
+                        </div>
+                    </div>
+                    <div id="chaseQuestion" class="hidden">
+                        <div class="chase-board mb-6 relative h-20 bg-gray-200 rounded-lg">
+                            <div class="absolute inset-y-0 left-0 bg-red-500 transition-all duration-500" 
+                                 style="width: 0%"></div>
+                            <div class="absolute inset-0 flex items-center justify-between px-4">
+                                <div class="z-10 text-white font-bold">Chaser</div>
+                                <div class="z-10 font-bold">Safety</div>
+                            </div>
+                        </div>
+                        <div id="chaseQuestionText" class="bg-indigo-100 p-4 rounded-lg mb-4"></div>
+                        <div id="chaseOptions" class="grid grid-cols-2 gap-4"></div>
+                    </div>
+                </div>
+
                 <!-- Guessing Phase -->
                 <div id="guessingPhase" class="hidden">
                     <h2 class="text-2xl font-bold text-indigo-600 mb-4">What was the original word?</h2>
@@ -431,6 +464,118 @@
             document.body.appendChild(animation);
             setTimeout(() => animation.remove(), 1500);
         }
+        
+        function selectChaseRole(role) {
+            if (role === 'chaser') {
+                document.getElementById('categorySelect').classList.remove('hidden');
+            } else {
+                socket.emit('select_chase_role', {
+                    room_id: roomId,
+                    role: 'contestant'
+                });
+            }
+        }
+        
+        function selectCategory(category) {
+            socket.emit('select_chase_role', {
+                room_id: roomId,
+                role: 'chaser',
+                category: category
+            });
+            document.getElementById('categorySelect').classList.add('hidden');
+        }
+        
+        function submitChaseAnswer(answer) {
+            socket.emit('submit_chase_answer', {
+                room_id: roomId,
+                answer: answer
+            });
+            
+            // Disable all option buttons
+            const options = document.getElementById('chaseOptions');
+            if (options) {
+                options.querySelectorAll('button').forEach(btn => {
+                    btn.disabled = true;
+                });
+            }
+        }
+        
+        socket.on('chase_setup', (data) => {
+            document.getElementById('chaseSetup').classList.remove('hidden');
+            document.getElementById('chaseQuestion').classList.add('hidden');
+            
+            // Show category options for chaser
+            const categoryOptions = document.getElementById('categoryOptions');
+            categoryOptions.innerHTML = data.categories.map(category => `
+                <button onclick="selectCategory('${category}')"
+                        class="bg-gray-100 p-3 rounded-lg hover:bg-gray-200 transition">
+                    ${category}
+                </button>
+            `).join('');
+        });
+
+        socket.on('chase_started', (data) => {
+            document.getElementById('chaseSetup').classList.add('hidden');
+            showNotification(`${data.chaser} is the Chaser! Category: ${data.category}`, 'info');
+        });
+
+        socket.on('chase_question', (data) => {
+            document.getElementById('chaseSetup').classList.add('hidden');
+            document.getElementById('chaseQuestion').classList.remove('hidden');
+            
+            // Update chase board
+            const chaseBoard = document.querySelector('.chase-board > div:first-child');
+            chaseBoard.style.width = `${(data.position / data.board_size) * 100}%`;
+            
+            // Show question
+            document.getElementById('chaseQuestionText').innerHTML = `
+                <h4 class="text-xl font-bold mb-2">Question:</h4>
+                <p class="text-lg">${data.question.question}</p>
+            `;
+            
+            // Show options
+            document.getElementById('chaseOptions').innerHTML = data.question.options.map(option => `
+                <button onclick="submitChaseAnswer('${option}')"
+                        class="p-3 bg-gray-100 rounded-lg text-center hover:bg-gray-200 transition">
+                    ${option}
+                </button>
+            `).join('');
+            
+            startTimer(GAME_CONFIG['chase_time']);
+        });
+
+        socket.on('chase_answer', (data) => {
+            const result = data.result;
+            const options = document.getElementById('chaseOptions');
+            if (options) {
+                // Disable all option buttons
+                options.querySelectorAll('button').forEach(btn => {
+                    btn.disabled = true;
+                    if (btn.textContent.trim() === data.answer) {
+                        btn.classList.add(result.is_correct ? 'bg-green-200' : 'bg-red-200');
+                    } else if (btn.textContent.trim() === result.correct_answer) {
+                        btn.classList.add('bg-green-200');
+                    }
+                });
+            }
+            
+            // Update chase board
+            const chaseBoard = document.querySelector('.chase-board > div:first-child');
+            if (chaseBoard) {
+                const newPosition = (data.position / data.board_size) * 100;
+                chaseBoard.style.width = `${newPosition}%`;
+            }
+            
+            showScoreAnimation(result.is_correct ? GAME_CONFIG['chase_step'] : 0, result.is_correct);
+        });
+
+        socket.on('chase_complete', (data) => {
+            document.getElementById('chaseQuestion').classList.add('hidden');
+            showNotification(
+                data.winner === 'contestant' ? 'Contestant escaped!' : 'Chaser wins!',
+                data.winner === 'contestant' ? 'success' : 'error'
+            );
+        });
 
         // Socket event handlers
         socket.on('connect', () => {
