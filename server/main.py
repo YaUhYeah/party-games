@@ -4,14 +4,17 @@ import random
 import json
 import qrcode
 import asyncio
+import base64
 from datetime import datetime
 from typing import Dict, List, Optional
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, HTTPException, Depends, File, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 from pathlib import Path
+from sqlalchemy.orm import Session
 from config import MUSIC_CONFIG, TRIVIA_QUESTIONS, GAME_TOPICS
+from database import get_db, User, GameScore, Achievement
 
 app = FastAPI()
 sio = socketio.AsyncServer(async_mode='asgi')
@@ -49,7 +52,7 @@ TRIVIA_QUESTIONS = [
 class GameRoom:
     def __init__(self, room_id):
         self.room_id = room_id
-        self.players = {}
+        self.players = {}  # {sid: {'name': str, 'user_id': int, 'profile': str}}
         self.game_state = 'waiting'
         self.current_game = None
         self.drawings = []
@@ -67,6 +70,7 @@ class GameRoom:
         self.current_question = None
         self.player_answers = {}
         self.round_scores = {}
+        self.db = next(get_db())
         
     def reset_round(self):
         self.drawings = []
@@ -142,6 +146,79 @@ class GameRoom:
     def is_game_complete(self):
         return self.round >= self.total_rounds
 
+# User profile and high score endpoints
+@app.post("/api/users")
+async def create_user(username: str, profile_picture: Optional[str] = None, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    user = User(username=username)
+    if profile_picture:
+        # Convert base64 to bytes
+        try:
+            image_data = base64.b64decode(profile_picture.split(',')[1])
+            user.profile_picture = image_data
+        except:
+            raise HTTPException(status_code=400, detail="Invalid profile picture format")
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"id": user.id, "username": user.username}
+
+@app.get("/api/users/{username}")
+async def get_user(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    profile_picture = None
+    if user.profile_picture:
+        profile_picture = base64.b64encode(user.profile_picture).decode('utf-8')
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "profile_picture": profile_picture,
+        "games_played": user.games_played,
+        "total_score": user.total_score,
+        "highest_score": user.highest_score
+    }
+
+@app.get("/api/leaderboard")
+async def get_leaderboard(game_type: Optional[str] = None, db: Session = Depends(get_db)):
+    if game_type:
+        # Get top scores for specific game type
+        scores = db.query(GameScore).filter(GameScore.game_type == game_type)\
+                  .order_by(GameScore.score.desc()).limit(10).all()
+        return [{
+            "username": db.query(User).filter(User.id == score.user_id).first().username,
+            "score": score.score,
+            "played_at": score.played_at
+        } for score in scores]
+    else:
+        # Get overall top users
+        users = db.query(User).order_by(User.highest_score.desc()).limit(10).all()
+        return [{
+            "username": user.username,
+            "highest_score": user.highest_score,
+            "games_played": user.games_played
+        } for user in users]
+
+@app.get("/api/achievements/{username}")
+async def get_achievements(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    achievements = db.query(Achievement).filter(Achievement.user_id == user.id).all()
+    return [{
+        "name": achievement.name,
+        "description": achievement.description,
+        "unlocked_at": achievement.unlocked_at
+    } for achievement in achievements]
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request):
     return templates.TemplateResponse(
@@ -184,15 +261,39 @@ async def connect(sid, environ):
 async def join_room(sid, data):
     room_id = data['room_id']
     player_name = data['player_name']
+    profile_picture = data.get('profile_picture')
+    
     if room_id in rooms:
         room = rooms[room_id]
+        
+        # Check if username exists or create new user
+        user = room.db.query(User).filter(User.username == player_name).first()
+        if not user:
+            user = User(username=player_name)
+            if profile_picture:
+                try:
+                    image_data = base64.b64decode(profile_picture.split(',')[1])
+                    user.profile_picture = image_data
+                except:
+                    pass  # Use default profile if conversion fails
+            room.db.add(user)
+            room.db.commit()
+            room.db.refresh(user)
+        
+        # Store user info in room
         room.players[sid] = {
             'name': player_name,
+            'user_id': user.id,
+            'profile': profile_picture or '',
             'score': 0
         }
+        
         await sio.enter_room(sid, room_id)
         await sio.emit('player_joined', {
-            'players': [p['name'] for p in room.players.values()]
+            'players': [{
+                'name': p['name'],
+                'profile': p['profile']
+            } for p in room.players.values()]
         }, room=room_id)
 
 async def start_round_timer(room: GameRoom):
@@ -219,9 +320,44 @@ async def handle_round_end(room: GameRoom):
     if room.is_game_complete():
         # Game is over
         leaderboard = room.get_leaderboard()
+        
+        # Save scores and update user stats
+        for sid, player in room.players.items():
+            user = room.db.query(User).filter(User.id == player['user_id']).first()
+            if user:
+                # Update user stats
+                user.games_played += 1
+                user.total_score += player['score']
+                if player['score'] > user.highest_score:
+                    user.highest_score = player['score']
+                
+                # Save game score
+                game_score = GameScore(
+                    user_id=user.id,
+                    game_type=room.current_game,
+                    score=player['score'],
+                    correct_answers=len([a for a in room.player_answers.values() 
+                                      if isinstance(a, dict) and a.get('correct', False)]),
+                    total_questions=room.round
+                )
+                room.db.add(game_score)
+                
+                # Check for achievements
+                await check_achievements(room, user, player['score'])
+        
+        room.db.commit()
+        
+        # Get updated leaderboard with profile pictures
+        final_leaderboard = [{
+            'name': p['name'],
+            'score': p['score'],
+            'profile': p['profile']
+        } for p in sorted(room.players.values(), key=lambda x: x['score'], reverse=True)]
+        
         await sio.emit('game_over', {
-            'leaderboard': leaderboard,
-            'final_scores': room.scores
+            'leaderboard': final_leaderboard,
+            'final_scores': room.scores,
+            'achievements': await get_latest_achievements(room)
         }, room=room.room_id)
         room.game_state = 'finished'
     else:
@@ -360,13 +496,89 @@ async def submit_guess(sid, data):
                 await handle_round_end(room)
 
 @sio.event
+async def check_achievements(room: GameRoom, user: User, score: int):
+    """Check and award achievements"""
+    achievements = []
+    
+    # First game achievement
+    if user.games_played == 1:
+        achievements.append({
+            'name': 'First Steps',
+            'description': 'Complete your first game'
+        })
+    
+    # High score achievements
+    if score >= 1000:
+        achievements.append({
+            'name': 'Score Master',
+            'description': 'Score 1000+ points in a single game'
+        })
+    
+    # Games played achievements
+    if user.games_played == 10:
+        achievements.append({
+            'name': 'Dedicated Player',
+            'description': 'Play 10 games'
+        })
+    
+    # Perfect round achievement
+    if room.current_game == 'trivia' and all(
+        answer.get('correct', False) for answer in room.player_answers.values()
+        if isinstance(answer, dict)
+    ):
+        achievements.append({
+            'name': 'Perfect Round',
+            'description': 'Answer all questions correctly in a trivia round'
+        })
+    
+    # Add achievements to database
+    for achievement in achievements:
+        existing = room.db.query(Achievement).filter(
+            Achievement.user_id == user.id,
+            Achievement.name == achievement['name']
+        ).first()
+        
+        if not existing:
+            new_achievement = Achievement(
+                user_id=user.id,
+                name=achievement['name'],
+                description=achievement['description']
+            )
+            room.db.add(new_achievement)
+
+async def get_latest_achievements(room: GameRoom):
+    """Get achievements earned in the current game"""
+    achievements = []
+    for player in room.players.values():
+        user_achievements = room.db.query(Achievement)\
+            .filter(Achievement.user_id == player['user_id'])\
+            .order_by(Achievement.unlocked_at.desc())\
+            .limit(5)\
+            .all()
+        
+        if user_achievements:
+            achievements.append({
+                'player': player['name'],
+                'achievements': [{
+                    'name': a.name,
+                    'description': a.description,
+                    'unlocked_at': a.unlocked_at
+                } for a in user_achievements]
+            })
+    
+    return achievements
+
+@sio.event
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
     for room in rooms.values():
         if sid in room.players:
             del room.players[sid]
             await sio.emit('player_left', {
-                'players': [p['name'] for p in room.players.values()]
+                'players': [{
+                    'name': p['name'],
+                    'profile': p['profile']
+                } for p in room.players.values()]
             }, room=room.room_id)
 
 if __name__ == "__main__":
