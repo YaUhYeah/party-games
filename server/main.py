@@ -21,8 +21,18 @@ sio = socketio.AsyncServer(async_mode='asgi')
 socket_app = socketio.ASGIApp(sio, app)
 
 # Mount static files and templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+# Get the absolute path to the server directory
+SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(SERVER_DIR, "static")
+TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
+
+# Create necessary directories if they don't exist
+os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(os.path.join(STATIC_DIR, "music"), exist_ok=True)
+os.makedirs(os.path.join(STATIC_DIR, "profiles"), exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Game state
 rooms = {}
@@ -236,7 +246,7 @@ async def host_game(request):
     qr.add_data(f'http://{request.client.host}:8000/join/{room_id}')
     qr.make(fit=True)
     qr_image = qr.make_image(fill_color="black", back_color="white")
-    qr_path = f'static/qr_{room_id}.png'
+    qr_path = os.path.join(STATIC_DIR, f'qr_{room_id}.png')
     qr_image.save(qr_path)
     
     return templates.TemplateResponse(
