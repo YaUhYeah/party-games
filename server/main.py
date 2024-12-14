@@ -388,6 +388,19 @@ async def join_room(sid, data):
     if room_id in rooms:
         room = rooms[room_id]
         
+        # Check if player is already in the room (rejoin case)
+        existing_sid = None
+        for s, p in room.players.items():
+            if p['name'] == player_name:
+                existing_sid = s
+                break
+        
+        if existing_sid:
+            # Remove old connection
+            if existing_sid in room.players:
+                del room.players[existing_sid]
+                await sio.leave_room(existing_sid, room_id)
+        
         # Check if username exists or create new user
         user = room.db.query(User).filter(User.username == player_name).first()
         if not user:
@@ -407,15 +420,35 @@ async def join_room(sid, data):
             'name': player_name,
             'user_id': user.id,
             'profile': profile_picture or '',
-            'score': 0
+            'score': 0,
+            'connected': True
         }
         
         await sio.enter_room(sid, room_id)
+        
+        # Send current game state to rejoining player
+        if room.game_state != 'waiting':
+            await sio.emit('game_state', {
+                'state': room.game_state,
+                'game_type': room.current_game,
+                'round': room.round,
+                'total_rounds': room.total_rounds,
+                'current_word': room.current_word if room.current_game == 'chinese_whispers' else None,
+                'current_question': room.current_question if room.current_game == 'trivia' else None,
+                'is_your_turn': room.player_order[room.current_player_index] == sid if room.current_game == 'chinese_whispers' else False
+            }, room=sid)
+        
+        # Update all clients with new player list
+        player_list = []
+        for player_sid, player_data in room.players.items():
+            if player_data['connected']:  # Only include connected players
+                player_list.append({
+                    'name': player_data['name'],
+                    'score': player_data['score']
+                })
+        
         await sio.emit('player_joined', {
-            'players': [{
-                'name': p['name'],
-                'profile': p['profile']
-            } for p in room.players.values()]
+            'players': player_list
         }, room=room_id)
 
 async def start_round_timer(room: GameRoom):
@@ -507,33 +540,48 @@ async def start_game(sid, data):
     if room_id in rooms:
         room = rooms[room_id]
         
-        if len(room.players) < GAME_CONFIG['min_players']:
+        # Count connected players
+        connected_players = sum(1 for p in room.players.values() if p['connected'])
+        if connected_players < GAME_CONFIG['min_players']:
             await sio.emit('error', {
-                'message': f"Need at least {GAME_CONFIG['min_players']} players to start"
+                'message': f"Need at least {GAME_CONFIG['min_players']} connected players to start"
             }, room=sid)
             return
             
         room.game_state = 'playing'
         room.current_game = game_type
-        room.player_order = list(room.players.keys())
+        
+        # Only include connected players in the game order
+        room.player_order = [sid for sid, player in room.players.items() if player['connected']]
         random.shuffle(room.player_order)
+        room.current_player_index = 0
         
         if game_type == 'chinese_whispers':
             room.current_word = room.get_next_word()
+            first_player = room.players[room.player_order[0]]
+            
+            # Send game start to all players
             await sio.emit('game_started', {
                 'game_type': game_type,
-                'first_player': room.players[room.player_order[0]]['name'],
-                'word': room.current_word,
+                'first_player': first_player['name'],
                 'round': room.round + 1,
                 'total_rounds': room.total_rounds
             }, room=room_id)
+            
+            # Send word only to first player
+            await sio.emit('your_turn', {
+                'word': room.current_word,
+                'time_limit': GAME_CONFIG['drawing_time']
+            }, room=room.player_order[0])
+            
         elif game_type == 'trivia':
             room.current_question = room.get_next_question()
             await sio.emit('game_started', {
                 'game_type': game_type,
                 'question': room.current_question,
                 'round': room.round + 1,
-                'total_rounds': room.total_rounds
+                'total_rounds': room.total_rounds,
+                'time_limit': GAME_CONFIG['trivia_time']
             }, room=room_id)
             
         await start_round_timer(room)
@@ -547,6 +595,13 @@ async def submit_drawing(sid, data):
         if room.game_state != 'playing' or room.current_game != 'chinese_whispers':
             return
             
+        # Verify it's the player's turn
+        if room.player_order[room.current_player_index] != sid:
+            await sio.emit('error', {
+                'message': "It's not your turn to draw"
+            }, room=sid)
+            return
+            
         room.drawings.append({
             'player': room.players[sid]['name'],
             'drawing': drawing_data,
@@ -554,19 +609,32 @@ async def submit_drawing(sid, data):
         })
         
         # Move to next player or end round
-        if room.is_round_complete():
+        if len(room.drawings) >= len(room.player_order):  # Only count connected players
             await sio.emit('all_drawings_complete', {
                 'drawings': room.drawings,
                 'original_word': room.current_word
             }, room=room_id)
             room.game_state = 'guessing'
         else:
-            next_player_id = room.player_order[(room.current_player_index + 1) % len(room.player_order)]
+            # Find next connected player
+            room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+            next_player_id = room.player_order[room.current_player_index]
+            
+            # Send game state to all players
             await sio.emit('next_player', {
                 'player': room.players[next_player_id]['name'],
-                'previous_drawing': drawing_data
+                'previous_drawing': drawing_data,
+                'round': room.round + 1,
+                'total_rounds': room.total_rounds
             }, room=room_id)
-            room.current_player_index += 1
+            
+            # Send word to next player
+            await sio.emit('your_turn', {
+                'word': room.current_word,
+                'time_limit': GAME_CONFIG['drawing_time'],
+                'previous_drawing': drawing_data
+            }, room=next_player_id)
+            
             await start_round_timer(room)
 
 @sio.event
@@ -695,13 +763,39 @@ async def disconnect(sid):
     print(f"Client disconnected: {sid}")
     for room in rooms.values():
         if sid in room.players:
-            del room.players[sid]
+            # Mark player as disconnected instead of removing
+            room.players[sid]['connected'] = False
+            
+            # Update player list for all clients
+            player_list = []
+            for player_sid, player_data in room.players.items():
+                if player_data['connected']:  # Only include connected players
+                    player_list.append({
+                        'name': player_data['name'],
+                        'score': player_data['score']
+                    })
+            
             await sio.emit('player_left', {
-                'players': [{
-                    'name': p['name'],
-                    'profile': p['profile']
-                } for p in room.players.values()]
+                'players': player_list,
+                'disconnected_player': room.players[sid]['name']
             }, room=room.room_id)
+            
+            # If it was this player's turn in drawing game, move to next player
+            if (room.game_state == 'playing' and 
+                room.current_game == 'chinese_whispers' and 
+                room.player_order[room.current_player_index] == sid):
+                room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+                next_player_id = room.player_order[room.current_player_index]
+                
+                # Skip disconnected players
+                while not room.players[next_player_id]['connected']:
+                    room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+                    next_player_id = room.player_order[room.current_player_index]
+                
+                await sio.emit('next_player', {
+                    'player': room.players[next_player_id]['name'],
+                    'skipped_disconnected': True
+                }, room=room.room_id)
 
 def get_local_ip():
     try:

@@ -287,10 +287,16 @@
         }
 
         function startDrawing(e) {
-            if (!isMyTurn) return;
+            if (!isMyTurn) {
+                showNotification("It's not your turn to draw!", 'error');
+                return;
+            }
             isDrawing = true;
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-            // Start new path for each stroke
+            const rect = canvas.getBoundingClientRect();
+            [lastX, lastY] = [
+                (e.clientX - rect.left) * (canvas.width / rect.width),
+                (e.clientY - rect.top) * (canvas.height / rect.height)
+            ];
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
         }
@@ -298,32 +304,34 @@
         function draw(e) {
             if (!isDrawing || !isMyTurn) return;
             
-            const currentX = e.offsetX;
-            const currentY = e.offsetY;
+            const rect = canvas.getBoundingClientRect();
+            const currentX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const currentY = (e.clientY - rect.top) * (canvas.height / rect.height);
             
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(currentX, currentY);
             ctx.strokeStyle = document.getElementById('colorPicker').value;
             ctx.lineWidth = document.getElementById('brushSize').value;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
             ctx.stroke();
             
             [lastX, lastY] = [currentX, currentY];
-            
-            // Add smooth curve
-            ctx.quadraticCurveTo(lastX, lastY, currentX, currentY);
-            ctx.stroke();
         }
 
         function stopDrawing() {
+            if (!isDrawing) return;
             isDrawing = false;
             ctx.closePath();
         }
 
         function clearCanvas() {
-            if (!isMyTurn) return;
+            if (!isMyTurn) {
+                showNotification("It's not your turn to draw!", 'error');
+                return;
+            }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            playSound('clear');
         }
 
         // Game flow functions
@@ -338,20 +346,35 @@
             document.getElementById('nameInput').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
             setupCanvas();
-            playMusic('lobby');
         }
 
         function submitDrawing() {
-            if (!isMyTurn) return;
+            if (!isMyTurn) {
+                showNotification("It's not your turn to draw!", 'error');
+                return;
+            }
+            
+            // Check if canvas is empty
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            const isEmpty = !imageData.some(channel => channel !== 0);
+            
+            if (isEmpty) {
+                showNotification('Please draw something before submitting!', 'error');
+                return;
+            }
+            
             const drawingData = canvas.toDataURL();
             socket.emit('submit_drawing', {
                 room_id: roomId,
                 drawing: drawingData
             });
-            playSound('submit');
+            
             isMyTurn = false;
             document.getElementById('drawingGame').classList.remove('active');
             showNotification('Drawing submitted!', 'success');
+            
+            // Clear canvas for next round
+            clearCanvas();
         }
 
         function submitGuess() {
@@ -420,24 +443,48 @@
         });
 
         socket.on('game_started', (data) => {
-            playMusic(data.game_type === 'chinese_whispers' ? 'drawing' : 'trivia');
             updateGameState(data);
+            if (data.first_player === playerName) {
+                showNotification('Game is starting! You draw first!', 'info');
+            } else {
+                showNotification(`Game is starting! ${data.first_player} draws first!`, 'info');
+            }
         });
 
-        socket.on('round_start', (data) => {
-            playSound('round_start');
-            updateRoundInfo(data);
+        socket.on('your_turn', (data) => {
+            isMyTurn = true;
+            document.getElementById('drawingGame').classList.add('active');
+            document.getElementById('wordToDraw').textContent = data.word;
+            
+            if (data.previous_drawing) {
+                showNotification('Your turn! Try to copy the previous drawing!', 'info');
+                // Show previous drawing in a reference panel
+                const referencePanel = document.createElement('div');
+                referencePanel.className = 'fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg';
+                referencePanel.innerHTML = `
+                    <h3 class="text-lg font-bold mb-2">Previous Drawing</h3>
+                    <img src="${data.previous_drawing}" alt="Previous drawing" class="max-w-xs">
+                `;
+                document.body.appendChild(referencePanel);
+            } else {
+                showNotification('Your turn! Draw the word shown above!', 'info');
+            }
+            
             startTimer(data.time_limit);
+            setupCanvas();  // Reset canvas for new turn
         });
 
         socket.on('next_player', (data) => {
-            isMyTurn = data.player === document.getElementById('playerName').value;
-            if (isMyTurn) {
-                playSound('your_turn');
-                showNotification('Your turn to draw!', 'info');
-                document.getElementById('drawingGame').classList.add('active');
-                startTimer(60);
+            isMyTurn = false;
+            document.getElementById('drawingGame').classList.remove('active');
+            
+            const playerName = document.getElementById('playerName').value;
+            if (data.player === playerName) {
+                showNotification('Get ready! You\'re drawing next!', 'info');
+            } else {
+                showNotification(`${data.player} is drawing next!`, 'info');
             }
+            
             updateGameState(data);
         });
 
