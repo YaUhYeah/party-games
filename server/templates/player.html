@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Play Game - Party Games Hub</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         body {
@@ -172,33 +173,84 @@
                 <!-- Chase Game -->
                 <div id="chaseGame" class="hidden">
                     <h2 class="text-2xl font-bold text-indigo-600 mb-4">The Chase</h2>
+                    
+                    <!-- Role Selection -->
                     <div id="chaseSetup" class="mb-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <button onclick="selectChaseRole('chaser')"
-                                    class="bg-red-600 text-white p-4 rounded-lg hover:bg-red-700 transition">
-                                Become the Chaser
-                            </button>
-                            <button onclick="selectChaseRole('contestant')"
-                                    class="bg-blue-600 text-white p-4 rounded-lg hover:bg-blue-700 transition">
-                                Take on the Chase
-                            </button>
-                        </div>
-                        <div id="categorySelect" class="hidden mt-4">
-                            <h3 class="text-lg font-bold mb-2">Select Category:</h3>
-                            <div id="categoryOptions" class="grid grid-cols-2 gap-2"></div>
-                        </div>
-                    </div>
-                    <div id="chaseQuestion" class="hidden">
-                        <div class="chase-board mb-6 relative h-20 bg-gray-200 rounded-lg">
-                            <div class="absolute inset-y-0 left-0 bg-red-500 transition-all duration-500" 
-                                 style="width: 0%"></div>
-                            <div class="absolute inset-0 flex items-center justify-between px-4">
-                                <div class="z-10 text-white font-bold">Chaser</div>
-                                <div class="z-10 font-bold">Safety</div>
+                        <div class="bg-white p-6 rounded-lg shadow-lg text-center mb-6">
+                            <h3 class="text-xl font-bold mb-4">Choose Your Role</h3>
+                            <p class="text-gray-600 mb-6">Will you be the fearsome Chaser or brave contestant?</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="flex flex-col items-center">
+                                    <button onclick="selectChaseRole('chaser')"
+                                            class="w-full bg-red-600 text-white p-6 rounded-lg hover:bg-red-700 transition shadow-lg transform hover:scale-105">
+                                        <i class="fas fa-crown text-3xl mb-2"></i>
+                                        <h4 class="text-xl font-bold">Become the Chaser</h4>
+                                        <p class="text-sm mt-2">Choose the category and challenge contestants</p>
+                                    </button>
+                                </div>
+                                <div class="flex flex-col items-center">
+                                    <button onclick="selectChaseRole('contestant')"
+                                            class="w-full bg-blue-600 text-white p-6 rounded-lg hover:bg-blue-700 transition shadow-lg transform hover:scale-105">
+                                        <i class="fas fa-running text-3xl mb-2"></i>
+                                        <h4 class="text-xl font-bold">Take on the Chase</h4>
+                                        <p class="text-sm mt-2">Test your knowledge and escape the Chaser</p>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div id="chaseQuestionText" class="bg-indigo-100 p-4 rounded-lg mb-4"></div>
-                        <div id="chaseOptions" class="grid grid-cols-2 gap-4"></div>
+                        
+                        <!-- Category Selection -->
+                        <div id="categorySelect" class="hidden">
+                            <div class="bg-white p-6 rounded-lg shadow-lg">
+                                <h3 class="text-xl font-bold mb-4">Select Your Category</h3>
+                                <p class="text-gray-600 mb-4">Choose the topic for this chase</p>
+                                <div id="categoryOptions" class="grid grid-cols-2 gap-4"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chase Game Board -->
+                    <div id="chaseQuestion" class="hidden">
+                        <div class="bg-white p-6 rounded-lg shadow-lg mb-6">
+                            <div class="chase-board mb-6">
+                                <div class="relative h-24 bg-gray-200 rounded-lg overflow-hidden">
+                                    <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-red-600 to-red-400 transition-all duration-500" 
+                                         style="width: 0%"></div>
+                                    <div class="absolute inset-0 flex items-center justify-between px-6">
+                                        <div class="z-10 text-white font-bold flex items-center">
+                                            <i class="fas fa-user-ninja text-2xl mr-2"></i>
+                                            <span>Chaser</span>
+                                        </div>
+                                        <div class="z-10 font-bold flex items-center">
+                                            <span>Safety</span>
+                                            <i class="fas fa-flag-checkered text-2xl ml-2"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between text-sm text-gray-600 mt-2">
+                                    <span>Start</span>
+                                    <span id="stepsToSafety"></span>
+                                </div>
+                            </div>
+
+                            <div id="chaseQuestionText" class="bg-indigo-50 p-6 rounded-lg mb-6">
+                                <div class="animate-pulse">
+                                    <h4 class="text-xl font-bold mb-2">Loading question...</h4>
+                                </div>
+                            </div>
+
+                            <div id="chaseOptions" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+                            <div id="timer" class="mt-6">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-gray-600">Time Remaining</span>
+                                    <span id="timerValue" class="font-bold">15s</span>
+                                </div>
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div id="timerBar" class="h-full bg-indigo-600 transition-all duration-1000" style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -508,11 +560,28 @@
             const categoryOptions = document.getElementById('categoryOptions');
             categoryOptions.innerHTML = data.categories.map(category => `
                 <button onclick="selectCategory('${category}')"
-                        class="bg-gray-100 p-3 rounded-lg hover:bg-gray-200 transition">
-                    ${category}
+                        class="bg-white p-4 rounded-lg shadow hover:shadow-lg transition transform hover:scale-105">
+                    <i class="fas ${getCategoryIcon(category)} text-2xl mb-2"></i>
+                    <h4 class="font-bold">${category}</h4>
                 </button>
             `).join('');
+
+            showNotification('Choose your role in The Chase!', 'info');
         });
+
+        function getCategoryIcon(category) {
+            const icons = {
+                'Science': 'fa-flask',
+                'History': 'fa-landmark',
+                'Geography': 'fa-globe-americas',
+                'Entertainment': 'fa-film',
+                'Sports': 'fa-futbol',
+                'Literature': 'fa-book',
+                'Art': 'fa-palette',
+                'Music': 'fa-music'
+            };
+            return icons[category] || 'fa-question';
+        }
 
         socket.on('chase_started', (data) => {
             document.getElementById('chaseSetup').classList.add('hidden');
@@ -525,56 +594,131 @@
             
             // Update chase board
             const chaseBoard = document.querySelector('.chase-board > div:first-child');
-            chaseBoard.style.width = `${(data.position / data.board_size) * 100}%`;
+            if (chaseBoard) {
+                chaseBoard.style.width = `${(data.position / data.board_size) * 100}%`;
+                document.getElementById('stepsToSafety').textContent = 
+                    `${data.board_size - data.position} steps to safety`;
+            }
             
             // Show question
             document.getElementById('chaseQuestionText').innerHTML = `
-                <h4 class="text-xl font-bold mb-2">Question:</h4>
-                <p class="text-lg">${data.question.question}</p>
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm font-semibold text-indigo-600">Category: ${data.question.category}</span>
+                    <span class="text-sm font-semibold" id="questionTimer">15s</span>
+                </div>
+                <h4 class="text-xl font-bold mb-4">${data.question.question}</h4>
             `;
             
             // Show options
             document.getElementById('chaseOptions').innerHTML = data.question.options.map(option => `
                 <button onclick="submitChaseAnswer('${option}')"
-                        class="p-3 bg-gray-100 rounded-lg text-center hover:bg-gray-200 transition">
+                        class="w-full p-6 bg-white rounded-lg shadow-md hover:shadow-lg text-lg font-medium 
+                               transition transform hover:scale-105 hover:bg-indigo-50">
                     ${option}
                 </button>
             `).join('');
             
+            // Start timer
             startTimer(GAME_CONFIG['chase_time']);
+            showNotification('Choose your answer quickly!', 'info');
         });
 
         socket.on('chase_answer', (data) => {
             const result = data.result;
             const options = document.getElementById('chaseOptions');
             if (options) {
-                // Disable all option buttons
+                // Disable all option buttons and show feedback
                 options.querySelectorAll('button').forEach(btn => {
                     btn.disabled = true;
-                    if (btn.textContent.trim() === data.answer) {
-                        btn.classList.add(result.is_correct ? 'bg-green-200' : 'bg-red-200');
-                    } else if (btn.textContent.trim() === result.correct_answer) {
-                        btn.classList.add('bg-green-200');
+                    const btnText = btn.textContent.trim();
+                    
+                    if (btnText === data.answer) {
+                        if (result.is_correct) {
+                            btn.classList.add('bg-green-100', 'border-2', 'border-green-500');
+                            btn.innerHTML += '<div class="mt-2 text-green-600"><i class="fas fa-check"></i> Correct!</div>';
+                        } else {
+                            btn.classList.add('bg-red-100', 'border-2', 'border-red-500');
+                            btn.innerHTML += '<div class="mt-2 text-red-600"><i class="fas fa-times"></i> Wrong!</div>';
+                        }
+                    } else if (btnText === result.correct_answer && !result.is_correct) {
+                        btn.classList.add('bg-green-50', 'border-2', 'border-green-500');
+                        btn.innerHTML += '<div class="mt-2 text-green-600"><i class="fas fa-check"></i> Correct Answer</div>';
                     }
                 });
             }
             
-            // Update chase board
+            // Update chase board with animation
             const chaseBoard = document.querySelector('.chase-board > div:first-child');
             if (chaseBoard) {
                 const newPosition = (data.position / data.board_size) * 100;
                 chaseBoard.style.width = `${newPosition}%`;
+                document.getElementById('stepsToSafety').textContent = 
+                    `${data.board_size - data.position} steps to safety`;
             }
             
-            showScoreAnimation(result.is_correct ? GAME_CONFIG['chase_step'] : 0, result.is_correct);
+            // Show feedback notification
+            if (result.is_correct) {
+                showNotification('Correct answer! Moving forward!', 'success');
+                showScoreAnimation(GAME_CONFIG['chase_step'], true);
+            } else {
+                showNotification(`Wrong! The correct answer was: ${result.correct_answer}`, 'error');
+                showScoreAnimation(0, false);
+            }
+            
+            // Play sound effect
+            playSound(result.is_correct ? 'correct_answer' : 'wrong_answer');
         });
 
         socket.on('chase_complete', (data) => {
             document.getElementById('chaseQuestion').classList.add('hidden');
+            
+            // Show result in game content area
+            const gameContent = document.getElementById('gameContent');
+            if (gameContent) {
+                gameContent.innerHTML = `
+                    <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                        <div class="mb-8">
+                            ${data.winner === 'contestant' ? `
+                                <div class="text-6xl mb-4"><i class="fas fa-trophy text-yellow-500"></i></div>
+                                <h3 class="text-2xl font-bold text-green-600 mb-2">Contestant Escaped!</h3>
+                                <p class="text-gray-600">Congratulations! You've outrun the Chaser!</p>
+                            ` : `
+                                <div class="text-6xl mb-4"><i class="fas fa-ghost text-red-500"></i></div>
+                                <h3 class="text-2xl font-bold text-red-600 mb-2">Chaser Wins!</h3>
+                                <p class="text-gray-600">The Chaser has caught up!</p>
+                            `}
+                        </div>
+                        
+                        <div class="max-w-md mx-auto">
+                            <h4 class="text-xl font-bold mb-4">Final Scores</h4>
+                            <div class="space-y-3">
+                                ${data.leaderboard.map((player, i) => `
+                                    <div class="flex items-center justify-between p-3 ${
+                                        i === 0 ? 'bg-yellow-50 border-2 border-yellow-200' : 'bg-gray-50'
+                                    } rounded-lg">
+                                        <div class="flex items-center">
+                                            <span class="text-2xl mr-3">${
+                                                i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : '🎮'
+                                            }</span>
+                                            <span class="font-bold">${player.name}</span>
+                                        </div>
+                                        <span class="text-indigo-600 font-bold">${player.score} points</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Show notification
             showNotification(
                 data.winner === 'contestant' ? 'Contestant escaped!' : 'Chaser wins!',
                 data.winner === 'contestant' ? 'success' : 'error'
             );
+            
+            // Play appropriate sound
+            playSound(data.winner === 'contestant' ? 'victory' : 'game_over');
         });
 
         // Socket event handlers
@@ -604,11 +748,23 @@
         });
 
         socket.on('game_started', (data) => {
-            updateGameState(data);
-            if (data.first_player === playerName) {
-                showNotification('Game is starting! You draw first!', 'info');
+            if (data.game_type === 'chase') {
+                document.getElementById('gameArea').classList.remove('hidden');
+                document.getElementById('nameInput').classList.add('hidden');
+                document.getElementById('drawingGame').classList.add('hidden');
+                document.getElementById('triviaGame').classList.add('hidden');
+                document.getElementById('chaseGame').classList.remove('hidden');
+                document.getElementById('chaseSetup').classList.remove('hidden');
+                document.getElementById('chaseQuestion').classList.add('hidden');
+                document.getElementById('categorySelect').classList.add('hidden');
+                showNotification('Choose your role in The Chase!', 'info');
             } else {
-                showNotification(`Game is starting! ${data.first_player} draws first!`, 'info');
+                updateGameState(data);
+                if (data.first_player === playerName) {
+                    showNotification('Game is starting! You draw first!', 'info');
+                } else {
+                    showNotification(`Game is starting! ${data.first_player} draws first!`, 'info');
+                }
             }
         });
 
