@@ -13,7 +13,74 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 from pathlib import Path
 from sqlalchemy.orm import Session
-from config import MUSIC_CONFIG, TRIVIA_QUESTIONS, GAME_TOPICS
+# Game configuration
+GAME_CONFIG = {
+    'min_players': 3,
+    'max_players': 12,
+    'drawing_time': 60,  # seconds
+    'guess_time': 30,    # seconds
+    'trivia_time': 20,   # seconds
+    'rounds_per_game': 3,
+    'points': {
+        'correct_guess': 100,
+        'partial_guess': 50,
+        'correct_trivia': 100,
+        'fast_answer_bonus': 50,  # bonus for answering within 5 seconds
+    }
+}
+
+# Music configuration
+MUSIC_CONFIG = {
+    'lobby': {
+        'file': 'static/music/lobby.mp3',
+        'volume': 0.5,
+        'loop': True
+    },
+    'drawing': {
+        'file': 'static/music/drawing.mp3',
+        'volume': 0.4,
+        'loop': True
+    },
+    'trivia': {
+        'file': 'static/music/trivia.mp3',
+        'volume': 0.4,
+        'loop': True
+    },
+    'correct_answer': {
+        'file': 'static/music/correct.mp3',
+        'volume': 0.6,
+        'loop': False
+    },
+    'wrong_answer': {
+        'file': 'static/music/wrong.mp3',
+        'volume': 0.6,
+        'loop': False
+    }
+}
+
+# Game topics
+GAME_TOPICS = {
+    'animals': ['elephant', 'giraffe', 'penguin', 'kangaroo', 'octopus'],
+    'food': ['pizza', 'sushi', 'hamburger', 'ice cream', 'tacos'],
+    'places': ['beach', 'mountain', 'city', 'forest', 'desert'],
+    'objects': ['telephone', 'bicycle', 'umbrella', 'glasses', 'camera']
+}
+
+# Trivia questions
+TRIVIA_QUESTIONS = [
+    {
+        'question': 'What is the largest planet in our solar system?',
+        'options': ['Jupiter', 'Saturn', 'Neptune', 'Mars'],
+        'correct': 'Jupiter',
+        'category': 'Science'
+    },
+    {
+        'question': 'Which country has the longest coastline in the world?',
+        'options': ['Canada', 'Russia', 'Indonesia', 'Australia'],
+        'correct': 'Canada',
+        'category': 'Geography'
+    }
+]
 from database import get_db, User, GameScore, Achievement
 
 app = FastAPI()
