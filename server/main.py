@@ -181,34 +181,38 @@ CHASE_QUESTIONS = {
 
 from database import get_db, User, GameScore, Achievement
 
-app = FastAPI()
+# Create FastAPI app
+app = FastAPI(
+    title="Party Games Hub",
+    description="A collection of fun multiplayer party games",
+    version="1.0.0"
+)
 
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Configure CORS for Socket.IO
+# Configure Socket.IO with proper CORS and error handling
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins='*',  # Allow connections from any origin
+    cors_allowed_origins='*',
     ping_timeout=35,
     ping_interval=25,
-    max_http_buffer_size=1e8  # 100MB max message size
+    max_http_buffer_size=1e8,  # 100MB max message size
+    logger=True,
+    engineio_logger=True
 )
 
-# Create Socket.IO ASGI app
-socket_app = socketio.ASGIApp(
-    sio,
-    app,
-    static_files={
-        '/': {'content_type': 'text/html', 'filename': 'index.html'}
-    }
-)
+# Create Socket.IO app
+socket_app = socketio.ASGIApp(sio)
+
+# Mount Socket.IO app at /socket.io
+app.mount("/socket.io", socket_app)
 
 # Mount static files and templates
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -577,19 +581,34 @@ async def connect(sid, environ):
 
 @sio.event
 async def join_room(sid, data):
+    """Handle player joining a room"""
     try:
-        room_id = data['room_id']
+        print(f"Join room request from {sid}: {data}")
+        
+        # Validate required data
+        if not isinstance(data, dict):
+            raise ValueError("Invalid data format")
+        
+        room_id = data.get('room_id')
+        player_name = data.get('player_name')
         is_host = data.get('is_host', False)
-        player_name = 'Host' if is_host else data['player_name']
-        profile_picture = data.get('profile_picture')
-
-        print(f"Join room request: {data}")
-
+        
+        if not room_id:
+            raise ValueError("Room ID is required")
+        if not is_host and not player_name:
+            raise ValueError("Player name is required")
+            
+        # Set player name for host
+        if is_host:
+            player_name = 'Host'
+            
+        print(f"Joining room {room_id} as {player_name} (host: {is_host})")
+        
         # Create room if it doesn't exist
         if room_id not in rooms:
             print(f"Creating new room: {room_id}")
             rooms[room_id] = GameRoom(room_id)
-
+            
         room = rooms[room_id]
         
         # Function to broadcast updated player list
