@@ -566,8 +566,19 @@ def get_local_ip():
     except:
         return "localhost"
 
+def create_app():
+    """Create and configure the application"""
+    return app
+
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    from pathlib import Path
+    
+    # Add the parent directory to Python path
+    parent_dir = str(Path(__file__).parent.parent)
+    if parent_dir not in sys.path:
+        sys.path.append(parent_dir)
     
     # Get local IP for QR code
     local_ip = get_local_ip()
@@ -576,10 +587,11 @@ if __name__ == "__main__":
     
     # Start the server
     uvicorn.run(
-        app,
+        "server.main:create_app",
         host="0.0.0.0",  # Listen on all network interfaces
         port=8000,
         reload=True,  # Enable auto-reload
-        reload_dirs=[os.path.dirname(os.path.abspath(__file__))],  # Watch server directory
+        factory=True,
+        reload_dirs=[str(Path(__file__).parent)],  # Watch server directory
         log_level="info"
     )
