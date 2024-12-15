@@ -109,19 +109,25 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
             room_id = ''.join(random.choices('0123456789', k=6))
             rooms[room_id] = GameRoom(room_id)
 
-            # Get IP addresses and create URLs
+            # Get local IP and create URL
             local_ip = get_local_ip()
-            public_ip = get_public_ip()
-            
-            # Create both local and public URLs
             local_url = f"http://{local_ip}:8000/join/{room_id}"
+            
+            # Try to get public IP and create URL (optional)
             public_url = None
-            if public_ip:
-                public_url = f"http://{public_ip}:8000/join/{room_id}"
-                # Create a short URL for public access
-                short_url = create_short_url(public_url)
-                if short_url:
-                    public_url = short_url
+            try:
+                public_ip = get_public_ip()
+                if public_ip:
+                    public_url = f"http://{public_ip}:8000/join/{room_id}"
+                    # Try to create a short URL (optional)
+                    try:
+                        short_url = create_short_url(public_url)
+                        if short_url:
+                            public_url = short_url
+                    except Exception as e:
+                        print(f"URL shortening failed: {e}")
+            except Exception as e:
+                print(f"Public IP detection failed: {e}")
 
             # Generate QR code (use local URL for faster local network access)
             qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -157,12 +163,22 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     async def join_game(request: Request, room_id: str):
+        print(f"Join request for room {room_id}")
         if room_id not in rooms:
+            print(f"Room {room_id} not found. Available rooms: {list(rooms.keys())}")
             return templates.TemplateResponse(
                 "error.html",
                 {"request": request, "error": "Room not found"}
             )
+        print(f"Rendering player template for room {room_id}")
         return templates.TemplateResponse(
             "player.html",
-            {"request": request, "room_id": room_id}
+            {
+                "request": request,
+                "room_id": room_id,
+                "debug": {
+                    "available_rooms": list(rooms.keys()),
+                    "player_count": len(rooms[room_id].players) if room_id in rooms else 0
+                }
+            }
         )

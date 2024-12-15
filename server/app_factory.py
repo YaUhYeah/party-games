@@ -31,7 +31,7 @@ def create_app() -> socketio.ASGIApp:
         allow_headers=["*"],
     )
 
-    # Configure Socket.IO
+    # Configure Socket.IO with enhanced settings
     sio = socketio.AsyncServer(
         async_mode='asgi',
         cors_allowed_origins='*',
@@ -39,7 +39,11 @@ def create_app() -> socketio.ASGIApp:
         ping_interval=25,
         max_http_buffer_size=1e8,  # 100MB max message size
         logger=True,
-        engineio_logger=True
+        engineio_logger=True,
+        reconnection=True,
+        reconnection_attempts=5,
+        reconnection_delay=1000,
+        reconnection_delay_max=5000
     )
 
     # Set up static files and templates

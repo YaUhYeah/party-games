@@ -1,36 +1,68 @@
-"""Game room model."""
+"""Game room model with enhanced features for better user experience."""
 import random
+import time
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
-from server.config.game_config import GAME_CONFIG, GAME_TOPICS
+from server.config.game_config import GAME_CONFIG, GAME_TOPICS, MUSIC_CONFIG
 from server.config.questions import TRIVIA_QUESTIONS, CHASE_QUESTIONS
 from server.database import get_db, User, Achievement
 
+class GameError(Exception):
+    """Custom game error class for better error handling."""
+    pass
+
 class GameRoom:
     def __init__(self, room_id: str):
+        # Basic room attributes
         self.room_id = room_id
         self.players: Dict[str, Dict[str, Any]] = {}  # {sid: {'name': str, 'user_id': int, 'profile': str, 'is_host': bool}}
         self.host_sid: Optional[str] = None
         self.game_state = 'waiting'
         self.current_game: Optional[str] = None
-        self.drawings: List[Dict[str, Any]] = []
-        self.current_word: Optional[str] = None
+        
+        # Game progress tracking
         self.round = 0
         self.total_rounds = GAME_CONFIG['rounds_per_game']
-        self.scores: Dict[str, int] = {}
+        self.difficulty_level = 'easy'  # Starts with easy, progresses to medium and hard
+        self.current_word: Optional[str] = None
+        self.current_question = None
         self.topic: Optional[str] = None
+        
+        # Player management
         self.player_order: List[str] = []
         self.current_player_index = 0
+        self.player_answers: Dict[str, Any] = {}
+        self.player_streaks: Dict[str, int] = {}  # Track correct answer streaks
+        self.player_skips: Dict[str, int] = {}  # Track consecutive skips
+        
+        # Scoring system
+        self.scores: Dict[str, int] = {}
+        self.round_scores: Dict[str, int] = {}
+        self.perfect_rounds: Dict[str, int] = {}  # Track perfect rounds per player
+        
+        # Time management
         self.round_start_time: Optional[datetime] = None
         self.timer_task = None
+        self.last_activity_time = datetime.now()
+        self.afk_warnings: Dict[str, bool] = {}  # Track AFK warnings per player
+        
+        # Content management
         self.used_words = set()
         self.used_questions = set()
-        self.current_question = None
-        self.player_answers: Dict[str, Any] = {}
-        self.round_scores: Dict[str, int] = {}
+        self.drawings: List[Dict[str, Any]] = []
+        
+        # Performance optimization
+        self.cache = {
+            'leaderboard': None,
+            'leaderboard_timestamp': None,
+            'available_words': None,
+            'word_cache_round': None
+        }
+        
+        # Database connection
         self.db = next(get_db())
-
+        
         # Chase game specific attributes
         self.chaser: Optional[str] = None
         self.chase_category: Optional[str] = None
@@ -38,25 +70,80 @@ class GameRoom:
         self.chase_questions: List[Dict[str, Any]] = []
         self.chase_contestant: Optional[str] = None
         self.chase_scores: Dict[str, int] = {}
+        
+        # Music state
+        self.current_music: Optional[str] = 'lobby'
+        self.music_fade_task = None
 
     def reset_round(self) -> None:
-        """Reset the round state."""
+        """Reset the round state with enhanced cleanup."""
         self.drawings = []
         self.current_word = None
         self.player_answers = {}
         self.round_scores = {}
         self.round_start_time = datetime.now()
+        self.last_activity_time = datetime.now()
+        
+        # Clear AFK warnings at round start
+        self.afk_warnings = {sid: False for sid in self.players}
+        
+        # Update difficulty based on round progress
+        total_rounds = self.total_rounds
+        if self.round < total_rounds * 0.3:
+            self.difficulty_level = 'easy'
+        elif self.round < total_rounds * 0.7:
+            self.difficulty_level = 'medium'
+        else:
+            self.difficulty_level = 'hard'
+            
+        # Clear performance caches
+        self.cache['leaderboard'] = None
+        self.cache['available_words'] = None
+        self.cache['word_cache_round'] = None
 
     def get_next_word(self) -> str:
-        """Get the next word for the drawing game."""
-        available_words = []
-        for words in GAME_TOPICS.values():
-            available_words.extend([w for w in words if w not in self.used_words])
-        if not available_words:
-            self.used_words.clear()
-            available_words = [w for topic in GAME_TOPICS.values() for w in topic]
+        """Get the next word with progressive difficulty."""
+        # Check cache first
+        if (self.cache['available_words'] is not None and 
+            self.cache['word_cache_round'] == self.round):
+            available_words = self.cache['available_words']
+        else:
+            available_words = []
+            # Get words based on current difficulty
+            for topic_words in GAME_TOPICS.values():
+                words = topic_words[self.difficulty_level]
+                available_words.extend([w for w in words if w not in self.used_words])
+                
+            # If no words available in current difficulty, include easier ones
+            if not available_words and self.difficulty_level != 'easy':
+                if self.difficulty_level == 'hard':
+                    # Try medium words
+                    for topic_words in GAME_TOPICS.values():
+                        words = topic_words['medium']
+                        available_words.extend([w for w in words if w not in self.used_words])
+                
+                # If still no words, try easy words
+                if not available_words:
+                    for topic_words in GAME_TOPICS.values():
+                        words = topic_words['easy']
+                        available_words.extend([w for w in words if w not in self.used_words])
+            
+            # If still no words, reset used words
+            if not available_words:
+                self.used_words.clear()
+                for topic_words in GAME_TOPICS.values():
+                    words = topic_words[self.difficulty_level]
+                    available_words.extend(words)
+            
+            # Update cache
+            self.cache['available_words'] = available_words
+            self.cache['word_cache_round'] = self.round
+        
         word = random.choice(available_words)
         self.used_words.add(word)
+        
+        # Update cache
+        self.cache['available_words'] = [w for w in available_words if w != word]
         return word
 
     def get_next_question(self) -> Dict[str, Any]:
@@ -69,35 +156,233 @@ class GameRoom:
         self.used_questions.add(question)
         return question
 
-    def calculate_score(self, player_id: str, is_correct: bool, answer_time: Optional[float] = None) -> int:
-        """Calculate score for a player's answer."""
-        base_score = 0
+    def calculate_score(self, player_id: str, is_correct: bool, answer_time: Optional[float] = None) -> Dict[str, Any]:
+        """Calculate score with enhanced mechanics and bonuses."""
+        result = {
+            'base_score': 0,
+            'streak_bonus': 0,
+            'time_bonus': 0,
+            'comeback_bonus': 0,
+            'participation_bonus': GAME_CONFIG['points']['participation_bonus'],
+            'total_score': 0
+        }
+        
+        # Update activity timestamp
+        self.last_activity_time = datetime.now()
+        self.afk_warnings[player_id] = False
+        
         if is_correct:
+            # Base score based on game type
             if self.current_game == 'chinese_whispers':
-                base_score = GAME_CONFIG['points']['correct_guess']
+                result['base_score'] = GAME_CONFIG['points']['correct_guess']
             else:  # trivia
-                base_score = GAME_CONFIG['points']['correct_trivia']
-                if answer_time and answer_time < 5:  # Fast answer bonus
-                    base_score += GAME_CONFIG['points']['fast_answer_bonus']
-        elif self.current_game == 'chinese_whispers':
-            # Check for partial matches
-            guess = self.player_answers[player_id].lower()
-            target = self.current_word.lower()
-            if len(set(guess.split()) & set(target.split())) > 0:
-                base_score = GAME_CONFIG['points']['partial_guess']
-
-        self.scores[player_id] = self.scores.get(player_id, 0) + base_score
-        self.round_scores[player_id] = base_score
-        return base_score
+                result['base_score'] = GAME_CONFIG['points']['correct_trivia']
+            
+            # Streak bonus
+            self.player_streaks[player_id] = self.player_streaks.get(player_id, 0) + 1
+            streak = self.player_streaks[player_id]
+            if streak > 1:
+                streak_multiplier = min(streak * GAME_CONFIG['points']['streak_multiplier'], 0.5)
+                result['streak_bonus'] = int(result['base_score'] * streak_multiplier)
+            
+            # Time bonus for quick answers
+            if answer_time is not None:
+                max_time = GAME_CONFIG['trivia_time'] if self.current_game == 'trivia' else GAME_CONFIG['guess_time']
+                time_factor = max(0, (max_time - answer_time) / max_time)
+                result['time_bonus'] = int(GAME_CONFIG['points']['fast_answer_bonus'] * time_factor)
+            
+            # Reset skip counter on correct answer
+            self.player_skips[player_id] = 0
+            
+        else:
+            # Reset streak on wrong answer
+            self.player_streaks[player_id] = 0
+            
+            if self.current_game == 'chinese_whispers':
+                # Enhanced partial matching
+                guess = self.player_answers[player_id].lower()
+                target = self.current_word.lower()
+                common_words = set(guess.split()) & set(target.split())
+                if common_words:
+                    result['base_score'] = GAME_CONFIG['points']['partial_guess'] * len(common_words)
+            
+            # Increment skip counter
+            self.player_skips[player_id] = self.player_skips.get(player_id, 0) + 1
+            
+            # Check for excessive skipping
+            if self.player_skips[player_id] >= GAME_CONFIG['max_consecutive_skips']:
+                result['participation_bonus'] = 0
+        
+        # Comeback bonus for trailing players
+        leaderboard = self.get_leaderboard()
+        if len(leaderboard) > 1:
+            max_score = leaderboard[0]['score']
+            player_score = self.scores.get(player_id, 0)
+            if player_score < max_score * 0.5:  # Significantly behind
+                result['comeback_bonus'] = GAME_CONFIG['points']['comeback_bonus']
+        
+        # Calculate total score
+        result['total_score'] = (
+            result['base_score'] +
+            result['streak_bonus'] +
+            result['time_bonus'] +
+            result['comeback_bonus'] +
+            result['participation_bonus']
+        )
+        
+        # Update player scores
+        self.scores[player_id] = self.scores.get(player_id, 0) + result['total_score']
+        self.round_scores[player_id] = result['total_score']
+        
+        return result
 
     def get_leaderboard(self) -> List[Dict[str, Any]]:
-        """Get the current leaderboard."""
-        return sorted(
-            [{'name': self.players[pid]['name'], 'score': score}
-             for pid, score in self.scores.items() if not self.players[pid].get('is_host', False)],
-            key=lambda x: x['score'],
-            reverse=True
+        """Get cached leaderboard with enhanced player stats."""
+        current_time = datetime.now()
+        if (self.cache['leaderboard'] is None or
+            self.cache['leaderboard_timestamp'] is None or
+            (current_time - self.cache['leaderboard_timestamp']).seconds > 2):
+            
+            leaderboard = []
+            for pid, score in self.scores.items():
+                if not self.players[pid].get('is_host', False):
+                    player_data = {
+                        'name': self.players[pid]['name'],
+                        'score': score,
+                        'streak': self.player_streaks.get(pid, 0),
+                        'perfect_rounds': self.perfect_rounds.get(pid, 0),
+                        'rank_change': 0  # Will be calculated below
+                    }
+                    leaderboard.append(player_data)
+            
+            # Sort by score
+            leaderboard.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Calculate rank changes if we have previous leaderboard
+            if self.cache['leaderboard']:
+                old_ranks = {player['name']: idx for idx, player in enumerate(self.cache['leaderboard'])}
+                for idx, player in enumerate(leaderboard):
+                    if player['name'] in old_ranks:
+                        player['rank_change'] = old_ranks[player['name']] - idx
+            
+            self.cache['leaderboard'] = leaderboard
+            self.cache['leaderboard_timestamp'] = current_time
+        
+        return self.cache['leaderboard']
+
+    def update_difficulty(self) -> None:
+        """Update game difficulty based on player performance."""
+        avg_score = sum(self.round_scores.values()) / len(self.round_scores) if self.round_scores else 0
+        max_possible = GAME_CONFIG['points']['correct_guess'] + GAME_CONFIG['points']['fast_answer_bonus']
+        
+        if avg_score > max_possible * 0.8:  # Players doing very well
+            self.difficulty_level = 'hard'
+        elif avg_score > max_possible * 0.5:  # Players doing okay
+            self.difficulty_level = 'medium'
+        else:  # Players struggling
+            self.difficulty_level = 'easy'
+
+    def shuffle_player_order_with_catchup(self) -> None:
+        """Shuffle player order with catch-up mechanic for trailing players."""
+        # Sort players by score
+        sorted_players = sorted(
+            [(pid, self.scores.get(pid, 0)) for pid in self.players if not self.players[pid].get('is_host', False)],
+            key=lambda x: x[1]
         )
+        
+        # Give trailing players better positions
+        if len(sorted_players) > 2:
+            # Put the lowest scoring player in a good position
+            lowest_scorer = sorted_players[0][0]
+            others = [p[0] for p in sorted_players[1:]]
+            random.shuffle(others)
+            # Position the lowest scorer in the first half of the round
+            insert_pos = random.randint(0, len(others) // 2)
+            others.insert(insert_pos, lowest_scorer)
+            self.player_order = others
+        else:
+            # For 2 or fewer players, just shuffle
+            self.player_order = [p[0] for p in sorted_players]
+            random.shuffle(self.player_order)
+
+    def advance_round(self) -> None:
+        """Advance to the next round with enhanced progression."""
+        self.round += 1
+        
+        # Check for perfect round achievements
+        for pid, score in self.round_scores.items():
+            if score > 0 and not any(
+                ans.get('is_wrong', True) 
+                for ans in self.player_answers.values() 
+                if ans.get('player_id') == pid
+            ):
+                self.perfect_rounds[pid] = self.perfect_rounds.get(pid, 0) + 1
+                # Award perfect round bonus
+                self.scores[pid] = self.scores.get(pid, 0) + GAME_CONFIG['points']['perfect_round']
+        
+        # Reset round state
+        self.reset_round()
+        
+        # Update game difficulty
+        if GAME_CONFIG['difficulty_scaling']['enabled']:
+            self.update_difficulty()
+        
+        # Set up next round content
+        if self.current_game == 'chinese_whispers':
+            # Shuffle player order with catch-up mechanic
+            self.shuffle_player_order_with_catchup()
+            self.current_player_index = 0
+            self.current_word = self.get_next_word()
+        else:  # trivia
+            self.current_question = self.get_next_question()
+        
+        # Trigger round transition music
+        self.change_music('round_transition', fade=True)
+
+    def is_game_complete(self) -> bool:
+        """Check if the game is complete and handle end-game events."""
+        if self.round >= self.total_rounds:
+            # Award achievements
+            self.award_end_game_achievements()
+            # Change to game over music
+            self.change_music('game_over', fade=True)
+            return True
+        return False
+
+    def award_end_game_achievements(self) -> None:
+        """Award achievements at the end of the game."""
+        leaderboard = self.get_leaderboard()
+        if leaderboard:
+            # Award winner achievement
+            winner = leaderboard[0]
+            winner_id = next(
+                pid for pid, data in self.players.items()
+                if data['name'] == winner['name']
+            )
+            user = self.db.query(User).filter_by(id=self.players[winner_id]['user_id']).first()
+            if user:
+                achievement = Achievement(
+                    user_id=user.id,
+                    name='game_winner',
+                    description=f'Won a game with {winner["score"]} points!'
+                )
+                self.db.add(achievement)
+                
+                # Perfect game achievement
+                if self.perfect_rounds.get(winner_id, 0) == self.total_rounds:
+                    achievement = Achievement(
+                        user_id=user.id,
+                        name='perfect_game',
+                        description='Completed a game with all perfect rounds!'
+                    )
+                    self.db.add(achievement)
+                
+                self.db.commit()
+
+    def change_music(self, music_type: str, fade: bool = False) -> None:
+        """Change background music with optional fade effect."""
+        if music_type in MUSIC_CONFIG:
+            self.current_music = music_type
 
     def start_chase_game(self, chaser_sid: str, category: str) -> None:
         """Initialize a new chase game."""
@@ -178,12 +463,78 @@ class GameRoom:
 
         return result
 
+    def validate_game_state(self) -> None:
+        """Validate and maintain game state consistency."""
+        if self.game_state not in ['waiting', 'playing', 'chase_setup', 'chase_question']:
+            self.game_state = 'waiting'
+            
+        if self.current_game and self.game_state == 'waiting':
+            self.current_game = None
+            
+        if self.round > self.total_rounds:
+            self.game_state = 'complete'
+            
+        # Validate player states
+        for pid in list(self.players.keys()):
+            if pid not in self.scores:
+                self.scores[pid] = 0
+            if pid not in self.player_streaks:
+                self.player_streaks[pid] = 0
+            if pid not in self.player_skips:
+                self.player_skips[pid] = 0
+            if pid not in self.perfect_rounds:
+                self.perfect_rounds[pid] = 0
+
+    def check_afk_players(self) -> List[str]:
+        """Check for AFK players and return list of inactive players."""
+        current_time = datetime.now()
+        afk_players = []
+        
+        for pid in self.players:
+            if (current_time - self.last_activity_time).seconds > GAME_CONFIG['idle_timeout']:
+                if not self.afk_warnings.get(pid, False):
+                    self.afk_warnings[pid] = True
+                    afk_players.append(pid)
+                    
+        return afk_players
+
+    def validate_game_action(self, player_sid: str, action_type: str) -> None:
+        """Validate game actions and maintain game integrity."""
+        if player_sid not in self.players:
+            raise GameError("Player not found in room")
+        
+        if self.game_state == 'waiting':
+            raise GameError("Game hasn't started yet")
+            
+        if action_type == 'draw' and self.current_game != 'chinese_whispers':
+            raise GameError("Invalid action for current game mode")
+            
+        if self.game_status['is_paused']:
+            raise GameError("Game is currently paused")
+            
+        # Update activity timestamp
+        self.last_activity_time = datetime.now()
+        self.afk_warnings[player_sid] = False
+
     def is_round_complete(self) -> bool:
-        """Check if the current round is complete."""
+        """Check if the current round is complete with enhanced validation."""
+        # Validate game state first
+        self.validate_game_state()
+        
         if self.current_game == 'chinese_whispers':
-            return len(self.drawings) >= len(self.players)
+            all_drawn = len(self.drawings) >= len(self.players)
+            all_active = all(
+                (datetime.now() - self.last_activity_time).seconds < GAME_CONFIG['idle_timeout']
+                for pid in self.players
+            )
+            return all_drawn or not all_active
         else:  # trivia
-            return len(self.player_answers) >= len(self.players)
+            all_answered = len(self.player_answers) >= len(self.players)
+            time_limit_reached = (
+                self.round_start_time and 
+                (datetime.now() - self.round_start_time).seconds >= GAME_CONFIG['trivia_time']
+            )
+            return all_answered or time_limit_reached
 
     def advance_round(self) -> None:
         """Advance to the next round."""

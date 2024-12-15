@@ -139,6 +139,15 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                         'score': player_data.get('score', 0)
                     })
 
+            # Send join confirmation to the player
+            await sio.emit('join_confirmed', {
+                'player_name': player_name,
+                'room_id': room_id,
+                'is_host': False,
+                'current_players': player_list
+            }, room=sid)
+
+            # Notify other players
             await sio.emit('player_joined', {
                 'players': player_list,
                 'new_player': player_name

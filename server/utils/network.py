@@ -3,7 +3,7 @@ import socket
 import subprocess
 import platform
 import json
-import requests
+from typing import Optional
 
 def get_local_ip() -> str:
     """Get the local IP address of the machine.
@@ -59,14 +59,15 @@ def get_local_ip() -> str:
 
     return "localhost"
 
-def get_public_ip() -> str:
+def get_public_ip() -> Optional[str]:
     """Get the public IP address of the machine.
     
-    Returns None if unable to get public IP.
+    Returns None if unable to get public IP or if requests module is not installed.
     """
     try:
+        # Attempt to import requests only when needed
         import requests
         response = requests.get('https://api.ipify.org?format=json', timeout=5)
         return response.json()['ip']
-    except:
+    except (ImportError, Exception):
         return None

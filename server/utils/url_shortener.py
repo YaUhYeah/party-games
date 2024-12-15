@@ -1,17 +1,20 @@
 """URL shortener utility."""
 import os
-import requests
 from typing import Optional
 
 def create_short_url(long_url: str) -> Optional[str]:
-    """Create a short URL using TinyURL's API.
+    """Create a short URL using various URL shortening services.
     
     Args:
         long_url: The URL to shorten
         
     Returns:
-        str: The shortened URL, or None if shortening failed
+        str: The shortened URL, or None if shortening failed or requests module is not installed
     """
+    try:
+        import requests
+    except ImportError:
+        return None
     try:
         # First try TinyURL API
         response = requests.get(
