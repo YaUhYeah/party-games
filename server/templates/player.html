@@ -436,9 +436,69 @@
     </div>
 
     <script>
-        // Debug functions
-        window.debugVisible = false;
-        window.debugState = {
+        // Global variables
+        let socket;
+        let hasJoined = false;
+        let debugVisible = false;
+        let debugState = {
+            roomId: null,
+            socketConnected: false,
+            lastError: null,
+            joinAttempts: 0,
+            events: []
+        };
+
+        // Global functions
+        function joinGame() {
+            const joinButton = document.querySelector('button[onclick="joinGame()"]');
+            const playerNameInput = document.getElementById('playerName');
+            
+            console.log('Join button clicked');
+            
+            try {
+                // Show loading state
+                if (joinButton) {
+                    joinButton.disabled = true;
+                    joinButton.querySelector('.join-text').textContent = 'Joining...';
+                    joinButton.querySelector('.loading-spinner').classList.remove('hidden');
+                }
+                
+                const playerName = playerNameInput ? playerNameInput.value.trim() : '';
+                console.log('Player name:', playerName);
+                console.log('Room ID:', roomId);
+                
+                if (!playerName) {
+                    throw new Error('Please enter your name');
+                }
+                
+                if (!socket) {
+                    throw new Error('Not connected to server');
+                }
+                
+                // Emit join request
+                console.log('Emitting join_room event');
+                socket.emit('join_room', {
+                    room_id: roomId,
+                    player_name: playerName,
+                    is_host: false
+                });
+                
+            } catch (error) {
+                console.error('Error in joinGame:', error);
+                showNotification(error.message || 'Failed to join game', 'error');
+                
+                // Re-enable button
+                if (joinButton) {
+                    joinButton.disabled = false;
+                    joinButton.querySelector('.join-text').textContent = 'Join Game';
+                    joinButton.querySelector('.loading-spinner').classList.add('hidden');
+                }
+            }
+        }
+
+        // Debug state
+        const debugVisible = false;
+        const debugState = {
             roomId: null,
             socketConnected: false,
             lastError: null,
@@ -501,8 +561,26 @@
             console.log('Connection status:', status);
         }
 
-        // Initialize socket with better error handling and debug logging
-        const socket = io({
+        // Notification function
+        function showNotification(message, type = 'info') {
+            const toast = document.getElementById('connectionToast');
+            const toastText = document.getElementById('connectionToastText');
+            
+            if (toast && toastText) {
+                toastText.textContent = message;
+                toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-full text-sm z-50 ${
+                    type === 'error' ? 'bg-red-600 text-white' : 'bg-black/80 text-white'
+                }`;
+                toast.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
+        // Initialize socket
+        socket = io({
             path: '/socket.io/',
             transports: ['polling', 'websocket'],
             reconnectionAttempts: 10,
@@ -519,12 +597,48 @@
         socket.on('connect', () => {
             console.log('Socket connected');
             updateConnectionStatus('Connected to server');
+            showNotification('Connected to server');
             debugState.socketConnected = true;
             debugState.events.push({
                 time: new Date().toISOString(),
                 event: 'connect'
             });
             updateDebugInfo();
+        });
+
+        socket.on('join_confirmed', (data) => {
+            console.log('Join confirmed:', data);
+            showNotification('Successfully joined the game!');
+            
+            // Hide join form and show game area
+            const nameInput = document.getElementById('nameInput');
+            const gameArea = document.getElementById('gameArea');
+            
+            if (nameInput && gameArea) {
+                nameInput.style.opacity = '0';
+                setTimeout(() => {
+                    nameInput.classList.add('hidden');
+                    gameArea.classList.remove('hidden');
+                    gameArea.style.opacity = '0';
+                    requestAnimationFrame(() => {
+                        gameArea.style.opacity = '1';
+                    });
+                }, 500);
+            }
+        });
+
+        socket.on('join_error', (error) => {
+            console.error('Join error:', error);
+            showNotification(error.message || 'Failed to join game', 'error');
+            
+            // Re-enable join button
+            const joinButton = document.querySelector('button[onclick="joinGame()"]');
+            if (joinButton) {
+                joinButton.disabled = false;
+                joinButton.querySelector('.join-text').textContent = 'Join Game';
+                joinButton.querySelector('.loading-spinner').classList.add('hidden');
+            }
+        });
         });
 
         socket.on('connect_error', (error) => {
