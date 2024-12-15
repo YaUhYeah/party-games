@@ -336,6 +336,7 @@
         let timeLeft = 0;
         let isMyTurn = false;
         let selectedAnswer = null;
+        let playerRole = null;
 
         // Audio management
         // No sound effects on client side - all sounds come from host TV
@@ -565,23 +566,45 @@
         }
         
         function selectChaseRole(role) {
+            playerRole = role;
             if (role === 'chaser') {
+                // Show category selection only for chaser
                 document.getElementById('categorySelect').classList.remove('hidden');
+                // Hide role selection buttons
+                document.querySelector('#chaseSetup .flex.flex-col.gap-4').classList.add('hidden');
             } else {
+                // For contestants, just emit the role selection
                 socket.emit('select_chase_role', {
                     room_id: roomId,
                     role: 'contestant'
                 });
+                // Show waiting message
+                document.querySelector('#chaseSetup .p-6').innerHTML = `
+                    <h3 class="text-2xl font-bold text-center mb-4">Waiting for the Chaser</h3>
+                    <p class="text-gray-600 text-center">The Chaser is selecting a category...</p>
+                    <div class="mt-4 flex justify-center">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    </div>
+                `;
             }
         }
         
         function selectCategory(category) {
+            if (playerRole !== 'chaser') return; // Only chaser can select category
             socket.emit('select_chase_role', {
                 room_id: roomId,
                 role: 'chaser',
                 category: category
             });
+            // Update UI to show waiting for contestants
             document.getElementById('categorySelect').classList.add('hidden');
+            document.querySelector('#chaseSetup .p-6').innerHTML = `
+                <h3 class="text-2xl font-bold text-center mb-4">Category Selected: ${category}</h3>
+                <p class="text-gray-600 text-center">Waiting for contestants to join...</p>
+                <div class="mt-4 flex justify-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                </div>
+            `;
         }
         
         function submitChaseAnswer(answer) {
@@ -603,13 +626,14 @@
             document.getElementById('chaseSetup').classList.remove('hidden');
             document.getElementById('chaseQuestion').classList.add('hidden');
             
-            // Show category options for chaser
-            const categoryOptions = document.getElementById('categoryOptions');
-            categoryOptions.innerHTML = data.categories.map(category => `
-                <button onclick="selectCategory('${category}')"
-                        class="bg-white p-4 rounded-lg shadow hover:shadow-lg transition transform hover:scale-105">
-                    <i class="fas ${getCategoryIcon(category)} text-2xl mb-2"></i>
-                    <h4 class="font-bold">${category}</h4>
+            // Only show category options for chaser
+            if (playerRole === 'chaser') {
+                const categoryOptions = document.getElementById('categoryOptions');
+                categoryOptions.innerHTML = data.categories.map(category => `
+                    <button onclick="selectCategory('${category}')"
+                            class="bg-white p-4 rounded-lg shadow hover:shadow-lg transition transform hover:scale-105">
+                        <i class="fas ${getCategoryIcon(category)} text-2xl mb-2"></i>
+                        <h4 class="font-bold">${category}</h4>
                 </button>
             `).join('');
 
