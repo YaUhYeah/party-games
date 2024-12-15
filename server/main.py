@@ -74,7 +74,7 @@ GAME_TOPICS = {
     'objects': ['telephone', 'bicycle', 'umbrella', 'glasses', 'camera']
 }
 
-from database import get_db, User, GameScore, Achievement
+from .database import get_db, User, GameScore, Achievement
 
 # Create FastAPI app first
 fastapi_app = FastAPI(
@@ -104,10 +104,12 @@ sio = socketio.AsyncServer(
 )
 
 # Create Socket.IO app with FastAPI as the other_asgi_app
-app = socketio.ASGIApp(
-    socketio_server=sio,
-    other_asgi_app=fastapi_app
-)
+def create_app():
+    app = socketio.ASGIApp(
+        socketio_server=sio,
+        other_asgi_app=fastapi_app
+    )
+    return app
 
 # Mount static files and templates
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
