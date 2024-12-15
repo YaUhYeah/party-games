@@ -91,20 +91,78 @@
                 </div>
             </div>
 
-            <div class="mt-8 text-center">
-                <button onclick="startGame('chinese_whispers')" 
-                        class="bg-indigo-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-indigo-700 transition">
-                    Start Drawing Game
-                </button>
-                <button onclick="startGame('trivia')" 
-                        class="bg-purple-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-purple-700 transition">
-                    Start Trivia Game
-                </button>
-                <button onclick="startGame('chase')" 
-                        class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition">
-                    Start Chase Game
-                </button>
+            <div class="mt-8 text-center space-y-4">
+                <div class="flex justify-center space-x-4">
+                    <button onclick="startGame('chinese_whispers')" 
+                            class="game-btn bg-indigo-600 text-white px-6 py-3 rounded-lg transform hover:scale-105 hover:bg-indigo-700 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                            </svg>
+                            Start Drawing Game
+                        </span>
+                    </button>
+                    <button onclick="startGame('trivia')" 
+                            class="game-btn bg-purple-600 text-white px-6 py-3 rounded-lg transform hover:scale-105 hover:bg-purple-700 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                            Start Trivia Game
+                        </span>
+                    </button>
+                    <button onclick="startGame('chase')" 
+                            class="game-btn bg-red-600 text-white px-6 py-3 rounded-lg transform hover:scale-105 hover:bg-red-700 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Start Chase Game
+                        </span>
+                    </button>
+                </div>
+                <div class="text-sm space-y-2">
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <p class="font-semibold text-gray-700 mb-1">Local Network (Same WiFi):</p>
+                        <a href="{{ local_url }}" class="text-indigo-600 hover:underline font-mono break-all">{{ local_url }}</a>
+                    </div>
+                    {% if public_url %}
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <p class="font-semibold text-gray-700 mb-1">Public URL (Anyone):</p>
+                        <a href="{{ public_url }}" class="text-indigo-600 hover:underline font-mono break-all">{{ public_url }}</a>
+                        <p class="text-xs text-gray-500 mt-1">This is a secure, shortened URL that masks your IP address</p>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
+
+            <script>
+                // Disable buttons while game is starting
+                function startGame(type) {
+                    const buttons = document.querySelectorAll('.game-btn');
+                    buttons.forEach(btn => btn.disabled = true);
+                    
+                    // Add loading state to clicked button
+                    const clickedBtn = event.currentTarget;
+                    const originalContent = clickedBtn.innerHTML;
+                    clickedBtn.innerHTML = `
+                        <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Starting Game...
+                    `;
+                    
+                    // Call the original startGame function
+                    socket.emit('start_game', { room_id: roomId, game_type: type });
+                    
+                    // Reset buttons after a delay (in case of error)
+                    setTimeout(() => {
+                        buttons.forEach(btn => btn.disabled = false);
+                        clickedBtn.innerHTML = originalContent;
+                    }, 5000);
+                }
+            </script>
         </div>
     </div>
 

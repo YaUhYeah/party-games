@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from server.database import get_db, User, GameScore, Achievement
 from server.models.game_room import GameRoom
-from server.utils.network import get_local_ip
+from server.utils.network import get_local_ip, get_public_ip
+from server.utils.url_shortener import create_short_url
 
 # Get the absolute path to the server directory
 SERVER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -108,15 +109,23 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
             room_id = ''.join(random.choices('0123456789', k=6))
             rooms[room_id] = GameRoom(room_id)
 
-            # Get local IP address
+            # Get IP addresses and create URLs
             local_ip = get_local_ip()
-            host = request.headers.get('host', f"{local_ip}:8000")
-            protocol = request.headers.get('x-forwarded-proto', 'http')
+            public_ip = get_public_ip()
+            
+            # Create both local and public URLs
+            local_url = f"http://{local_ip}:8000/join/{room_id}"
+            public_url = None
+            if public_ip:
+                public_url = f"http://{public_ip}:8000/join/{room_id}"
+                # Create a short URL for public access
+                short_url = create_short_url(public_url)
+                if short_url:
+                    public_url = short_url
 
-            # Generate QR code
+            # Generate QR code (use local URL for faster local network access)
             qr = qrcode.QRCode(version=1, box_size=10, border=5)
-            join_url = f"{protocol}://{host}/join/{room_id}"
-            qr.add_data(join_url)
+            qr.add_data(local_url)
             qr.make(fit=True)
             qr_image = qr.make_image(fill_color="black", back_color="white")
 
@@ -127,8 +136,9 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
 
             # Log paths for debugging
             print(f"QR Code saved to: {qr_path}")
-            print(f"QR Code URL: /static/qr/{qr_filename}")
-            print(f"Join URL: {join_url}")
+            print(f"Local URL: {local_url}")
+            if public_url:
+                print(f"Public URL: {public_url}")
 
             return templates.TemplateResponse(
                 "host.html",
@@ -136,7 +146,9 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
                     "request": request,
                     "room_id": room_id,
                     "qr_code": f"/static/qr/{qr_filename}",
-                    "join_url": join_url
+                    "local_url": local_url,
+                    "public_url": public_url,
+                    "local_ip": local_ip
                 }
             )
         except Exception as e:

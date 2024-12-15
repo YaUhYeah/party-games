@@ -13,5 +13,7 @@ setup(
         "jinja2",
         "python-multipart",
         "pillow",
+        "requests",
+        "netifaces",
     ],
 )
