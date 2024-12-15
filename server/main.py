@@ -565,3 +565,21 @@ def get_local_ip():
         return ip
     except:
         return "localhost"
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    # Get local IP for QR code
+    local_ip = get_local_ip()
+    print(f"Server starting on {local_ip}:8000")
+    print("Use this IP address for connecting from other devices on the same network")
+    
+    # Start the server
+    uvicorn.run(
+        app,
+        host="0.0.0.0",  # Listen on all network interfaces
+        port=8000,
+        reload=True,  # Enable auto-reload
+        reload_dirs=[os.path.dirname(os.path.abspath(__file__))],  # Watch server directory
+        log_level="info"
+    )
