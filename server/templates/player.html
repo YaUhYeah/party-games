@@ -141,6 +141,25 @@
                 padding: 1rem;
             }
             
+            #nameInput .bg-white {
+                margin: 1rem;
+                padding: 1.5rem;
+                border-radius: 1.5rem;
+            }
+            
+            #nameInput input[type="text"] {
+                font-size: 1.125rem;
+                padding: 0.875rem;
+                border-radius: 1rem;
+            }
+            
+            #nameInput button {
+                padding: 0.875rem;
+                font-size: 1.125rem;
+                border-radius: 1rem;
+                margin-top: 1rem;
+            }
+            
             .game-container {
                 padding: 0;
                 max-width: 100vw;
@@ -240,21 +259,28 @@
     <div class="container mx-auto">
         <div class="game-container">
             <!-- Player Name Input -->
-            <div id="nameInput" class="text-center mb-8">
-                <h2 class="text-2xl font-bold text-indigo-600 mb-4">Enter Your Name</h2>
-                <input type="text" id="playerName" 
-                       class="w-64 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                       placeholder="Your name">
-                <button onclick="joinGame()" 
-                        class="ml-2 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition flex items-center space-x-2 min-w-[100px] justify-center">
-                    <span class="join-text">Join</span>
-                    <span class="loading-spinner hidden">
-                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </span>
-                </button>
+            <div id="nameInput" class="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/90 to-purple-600/90 backdrop-blur-sm">
+                <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-11/12 md:w-96 transform transition-all">
+                    <h2 class="text-3xl font-bold text-indigo-600 mb-6">Join Game</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="playerName" class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+                            <input type="text" id="playerName" 
+                                   class="w-full p-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all"
+                                   placeholder="Enter your name">
+                        </div>
+                        <button onclick="joinGame()" 
+                                class="w-full bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2">
+                            <span class="join-text font-semibold">Join Game</span>
+                            <span class="loading-spinner hidden">
+                                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Game Area -->
@@ -412,10 +438,6 @@
             console.log('Socket event:', event, args);
         });
         
-        // Now connect
-        socket.connect();
-        console.log('Socket connection initiated');
-        
         // Add connection event handlers
         socket.on('connect', () => {
             console.log('Socket connected successfully');
@@ -425,10 +447,18 @@
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
             showNotification('Connection error. Please check your internet connection.', 'error');
+            // Re-enable join button if it was disabled
+            const joinButton = document.querySelector('button[onclick="joinGame()"]');
+            if (joinButton) {
+                joinButton.disabled = false;
+                joinButton.querySelector('.join-text').textContent = 'Join';
+                joinButton.querySelector('.loading-spinner').classList.add('hidden');
+            }
         });
         
-        // Now connect
+        // Connect once
         socket.connect();
+        console.log('Socket connection initiated');
         
         let canvas, ctx;
         let isDrawing = false;
@@ -639,24 +669,68 @@
                 }
                 
                 console.log('Socket connected, joining room...');
-                socket.emit('join_room', {
-                    room_id: roomId,
-                    player_name: playerName
+                
+                // Use a Promise to handle the join response
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        reject(new Error('Join request timed out'));
+                    }, 10000);
+                    
+                    // Listen for join confirmation
+                    socket.once('join_confirmed', (data) => {
+                        clearTimeout(timeout);
+                        console.log('Join confirmed:', data);
+                        hasJoined = true;
+                        resolve(data);
+                    });
+                    
+                    // Listen for join error
+                    socket.once('join_error', (error) => {
+                        clearTimeout(timeout);
+                        console.error('Join error:', error);
+                        reject(new Error(error.message || 'Failed to join game'));
+                    });
+                    
+                    // Emit join request
+                    socket.emit('join_room', {
+                        room_id: roomId,
+                        player_name: playerName
+                    });
                 });
                 
-                // Start a timeout to re-enable button if no response
+                // Animate the transition
+                const nameInput = document.getElementById('nameInput');
+                const gameArea = document.getElementById('gameArea');
+                
+                // Fade out name input
+                nameInput.style.opacity = '1';
+                nameInput.style.transition = 'opacity 0.5s ease-out';
+                nameInput.style.opacity = '0';
+                
+                // Wait for fade out, then switch displays
                 setTimeout(() => {
-                    if (!hasJoined && joinButton) {
-                        joinButton.disabled = false;
-                        joinButton.querySelector('.join-text').textContent = 'Join';
-                        joinButton.querySelector('.loading-spinner').classList.add('hidden');
-                        showNotification('Join request timed out. Please try again.', 'error');
-                    }
-                }, 10000);
+                    nameInput.classList.add('hidden');
+                    gameArea.classList.remove('hidden');
+                    // Start with opacity 0
+                    gameArea.style.opacity = '0';
+                    // Force a reflow
+                    void gameArea.offsetWidth;
+                    // Add transition and fade in
+                    gameArea.style.transition = 'opacity 0.5s ease-in';
+                    gameArea.style.opacity = '1';
+                }, 500);
+                showNotification('Successfully joined the game!', 'success');
                 
             } catch (error) {
                 console.error('Error in joinGame:', error);
                 showNotification(error.message || 'Failed to join game. Please try again.', 'error');
+                
+                // Re-enable join button on error
+                if (joinButton) {
+                    joinButton.disabled = false;
+                    joinButton.querySelector('.join-text').textContent = 'Join';
+                    joinButton.querySelector('.loading-spinner').classList.add('hidden');
+                }
                 
                 // Reset button state
                 if (joinButton) {
