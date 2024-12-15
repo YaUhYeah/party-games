@@ -1,4 +1,5 @@
 """Routes module."""
+import os
 import random
 import base64
 from typing import Dict, Optional
@@ -9,9 +10,18 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from ..database import get_db, User, GameScore, Achievement
-from ..models.game_room import GameRoom
-from ..utils.network import get_local_ip
+from server.database import get_db, User, GameScore, Achievement
+from server.models.game_room import GameRoom
+from server.utils.network import get_local_ip
+
+# Get the absolute path to the server directory
+SERVER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_DIR = os.path.join(SERVER_DIR, "static")
+QR_DIR = os.path.join(STATIC_DIR, "qr")
+
+# Create necessary directories
+os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(QR_DIR, exist_ok=True)
 
 def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, GameRoom]):
     """Register all routes with the application."""
@@ -94,25 +104,39 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
 
     @app.get("/host", response_class=HTMLResponse)
     async def host_game(request: Request):
-        room_id = ''.join(random.choices('0123456789', k=6))
-        rooms[room_id] = GameRoom(room_id)
+        try:
+            room_id = ''.join(random.choices('0123456789', k=6))
+            rooms[room_id] = GameRoom(room_id)
 
-        # Get local IP address
-        local_ip = get_local_ip()
-        host = f"{local_ip}:8000"
+            # Get local IP address
+            local_ip = get_local_ip()
+            host = request.headers.get('host', f"{local_ip}:8000")
+            protocol = request.headers.get('x-forwarded-proto', 'http')
 
-        # Generate QR code
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(f'http://{host}/join/{room_id}')
-        qr.make(fit=True)
-        qr_image = qr.make_image(fill_color="black", back_color="white")
-        qr_path = f'static/qr_{room_id}.png'
-        qr_image.save(qr_path)
+            # Generate QR code
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            join_url = f"{protocol}://{host}/join/{room_id}"
+            qr.add_data(join_url)
+            qr.make(fit=True)
+            qr_image = qr.make_image(fill_color="black", back_color="white")
 
-        return templates.TemplateResponse(
-            "host.html",
-            {"request": request, "room_id": room_id}
-        )
+            # Save QR code with absolute path
+            qr_filename = f'qr_{room_id}.png'
+            qr_path = os.path.join(QR_DIR, qr_filename)
+            qr_image.save(qr_path)
+
+            return templates.TemplateResponse(
+                "host.html",
+                {
+                    "request": request,
+                    "room_id": room_id,
+                    "qr_code": f"/static/qr/{qr_filename}",
+                    "join_url": join_url
+                }
+            )
+        except Exception as e:
+            print(f"Error in host_game: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     async def join_game(request: Request, room_id: str):

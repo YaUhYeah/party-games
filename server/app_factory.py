@@ -51,10 +51,14 @@ def create_app() -> socketio.ASGIApp:
     os.makedirs(STATIC_DIR, exist_ok=True)
     os.makedirs(os.path.join(STATIC_DIR, "music"), exist_ok=True)
     os.makedirs(os.path.join(STATIC_DIR, "profiles"), exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "qr"), exist_ok=True)
 
     # Mount static files
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+    # Add static files to templates context
+    templates.env.globals["static_url"] = "/static"
 
     # Import and register routes and socket events
     from server.routes import register_routes
