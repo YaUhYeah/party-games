@@ -133,12 +133,40 @@
         
         /* Mobile optimizations */
         @media (max-width: 768px) {
+            body {
+                overflow-x: hidden;  /* Prevent horizontal scrolling */
+            }
+            
             #nameInput {
                 padding: 1rem;
             }
             
             .game-container {
                 padding: 0;
+                max-width: 100vw;
+                overflow-x: hidden;
+            }
+            
+            #canvas {
+                max-width: 100%;
+                height: auto;
+                touch-action: none;  /* Prevent scrolling while drawing */
+            }
+            
+            .drawing-controls {
+                flex-wrap: wrap;
+                justify-content: space-around;
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+            
+            .color-picker {
+                width: 30px;
+                height: 30px;
+            }
+            
+            .brush-size {
+                width: 80px;
             }
             
             #chaseGame {
@@ -151,10 +179,11 @@
                 flex-grow: 1;
                 display: flex;
                 flex-direction: column;
+                padding: 0.5rem;
             }
             
             #chaseSetup > div {
-                margin: 1rem;
+                margin: 0.5rem;
                 flex-grow: 1;
                 display: flex;
                 flex-direction: column;
@@ -165,6 +194,7 @@
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
+                padding: 1rem;
             }
             
             #scoreboard {
@@ -173,11 +203,35 @@
                 left: 0;
                 right: 0;
                 background: rgba(255, 255, 255, 0.95);
-                padding: 1rem;
+                padding: 0.75rem;
                 margin: 0;
                 border-top-left-radius: 1rem;
                 border-top-right-radius: 1rem;
                 box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+                z-index: 1000;
+                max-height: 40vh;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Improve touch targets */
+            button, input[type="text"], .answer-option {
+                min-height: 44px;  /* iOS minimum touch target size */
+                padding: 0.75rem;
+            }
+            
+            /* Prevent zoom on input focus */
+            input[type="text"], textarea {
+                font-size: 16px;  /* Prevent iOS zoom on focus */
+            }
+            
+            /* Improve notifications on mobile */
+            .notification {
+                width: 90%;
+                left: 5%;
+                right: 5%;
+                font-size: 0.9rem;
+                padding: 0.75rem;
             }
         }
     </style>
@@ -325,9 +379,11 @@
 
     <script>
         const socket = io({
-            reconnectionAttempts: 5,
-            timeout: 10000,
-            transports: ['websocket', 'polling'],
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000,
+            transports: ['polling', 'websocket'],  // Try polling first for better mobile compatibility
             autoConnect: true,
             query: {
                 room_id: "{{ room_id }}"
@@ -415,9 +471,17 @@
             canvas.addEventListener('mouseout', stopDrawing);
             
             // Touch events
-            canvas.addEventListener('touchstart', handleTouch);
-            canvas.addEventListener('touchmove', handleTouch);
+            // Touch events with improved mobile handling
+            canvas.addEventListener('touchstart', function(e) {
+                e.preventDefault();  // Prevent scrolling when drawing
+                handleTouch(e);
+            }, { passive: false });
+            canvas.addEventListener('touchmove', function(e) {
+                e.preventDefault();  // Prevent scrolling when drawing
+                handleTouch(e);
+            }, { passive: false });
             canvas.addEventListener('touchend', stopDrawing);
+            canvas.addEventListener('touchcancel', stopDrawing);
             
             // Set initial drawing style
             ctx.lineCap = 'round';
@@ -425,12 +489,13 @@
         }
 
         function handleTouch(e) {
-            e.preventDefault();
+            if (!e.touches || !e.touches[0]) return;
             const touch = e.touches[0];
             const rect = canvas.getBoundingClientRect();
+            const scale = canvas.width / rect.width;  // Handle high DPI displays
             const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 'mousemove', {
-                clientX: touch.clientX - rect.left,
-                clientY: touch.clientY - rect.top
+                clientX: (touch.clientX - rect.left) * scale,
+                clientY: (touch.clientY - rect.top) * scale
             });
             canvas.dispatchEvent(mouseEvent);
         }
@@ -904,12 +969,30 @@
 
         socket.on('connect_error', (error) => {
             console.error('Connection error:', error);
-            showNotification('Failed to connect to server. Please try again.', 'error');
+            showNotification('Connection error. Retrying... Please check your internet connection.', 'error');
+            
+            // Try to reconnect with polling if websocket fails
+            if (socket.io.opts.transports.includes('websocket')) {
+                console.log('Falling back to polling transport');
+                socket.io.opts.transports = ['polling'];
+                socket.connect();
+            }
         });
 
-        socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+        socket.on('disconnect', (reason) => {
+            console.log('Disconnected from server:', reason);
             showNotification('Disconnected from server. Attempting to reconnect...', 'error');
+            
+            // Clear any game state that should be reset
+            isMyTurn = false;
+            clearInterval(timerInterval);
+            
+            // Attempt to reconnect
+            setTimeout(() => {
+                if (!socket.connected) {
+                    socket.connect();
+                }
+            }, 1000);
         });
 
         socket.on('error', (data) => {
