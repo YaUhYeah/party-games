@@ -256,6 +256,15 @@
     </style>
 </head>
 <body>
+    <!-- Debug Overlay -->
+    <div id="debugOverlay" class="fixed top-0 right-0 bg-black/80 text-white p-4 m-4 rounded-lg text-sm font-mono max-w-xs overflow-auto max-h-96 hidden">
+        <div class="flex justify-between items-center mb-2">
+            <h3 class="font-bold">Debug Info</h3>
+            <button onclick="toggleDebug()" class="text-gray-400 hover:text-white">[X]</button>
+        </div>
+        <pre id="debugInfo" class="whitespace-pre-wrap"></pre>
+    </div>
+
     <div class="container mx-auto">
         <div class="game-container">
             <!-- Player Name Input -->
@@ -415,11 +424,50 @@
     </div>
 
     <script>
-        // Get room ID from template
+        // Debug functions
+        let debugVisible = false;
+        const debugState = {
+            roomId: null,
+            socketConnected: false,
+            lastError: null,
+            joinAttempts: 0,
+            events: []
+        };
+
+        function updateDebugInfo() {
+            const debugInfo = document.getElementById('debugInfo');
+            if (debugInfo) {
+                debugInfo.textContent = JSON.stringify(debugState, null, 2);
+            }
+        }
+
+        function toggleDebug() {
+            const overlay = document.getElementById('debugOverlay');
+            debugVisible = !debugVisible;
+            overlay.classList.toggle('hidden', !debugVisible);
+            if (debugVisible) {
+                updateDebugInfo();
+            }
+        }
+
+        // Add debug keyboard shortcut
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                toggleDebug();
+            }
+        });
+
+        // Get room ID and debug info from template
         const roomId = "{{ room_id }}";
+        const debug = {{ debug | tojson }};
         console.log('Room ID from template:', roomId);
+        console.log('Debug info:', debug);
         
-        // Initialize socket with better error handling
+        // Update debug state
+        debugState.roomId = roomId;
+        updateDebugInfo();
+
+        // Initialize socket with better error handling and debug logging
         const socket = io({
             path: '/socket.io/',
             transports: ['polling', 'websocket'],
@@ -431,6 +479,73 @@
             query: {
                 room_id: roomId
             }
+        });
+
+        // Socket connection events
+        socket.on('connect', () => {
+            console.log('Socket connected');
+            debugState.socketConnected = true;
+            debugState.events.push({
+                time: new Date().toISOString(),
+                event: 'connect'
+            });
+            updateDebugInfo();
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Socket disconnected');
+            debugState.socketConnected = false;
+            debugState.events.push({
+                time: new Date().toISOString(),
+                event: 'disconnect'
+            });
+            updateDebugInfo();
+        });
+
+        // Debug logging for all socket events
+        socket.onAny((event, ...args) => {
+            console.log('Socket event:', event, args);
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Socket connection error:', error);
+            showNotification('Connection error: ' + error.message, 'error');
+        });
+
+        socket.on('join_error', (error) => {
+            console.error('Join error:', error);
+            showNotification(error.message || 'Failed to join game', 'error');
+            // Re-enable join button
+            const joinButton = document.querySelector('button[onclick="joinGame()"]');
+            if (joinButton) {
+                joinButton.disabled = false;
+                joinButton.querySelector('.join-text').textContent = 'Join Game';
+                joinButton.querySelector('.loading-spinner').classList.add('hidden');
+            }
+        });
+
+        socket.on('join_confirmed', (data) => {
+            console.log('Join confirmed:', data);
+            hasJoined = true;
+            // Show success message and transition to game area
+            showNotification('Successfully joined the game!', 'success');
+            
+            // Animate transition to game area
+            const nameInput = document.getElementById('nameInput');
+            const gameArea = document.getElementById('gameArea');
+            
+            nameInput.style.opacity = '1';
+            nameInput.style.transition = 'opacity 0.5s ease-out';
+            nameInput.style.opacity = '0';
+            
+            setTimeout(() => {
+                nameInput.classList.add('hidden');
+                gameArea.classList.remove('hidden');
+                gameArea.style.opacity = '0';
+                void gameArea.offsetWidth;
+                gameArea.style.transition = 'opacity 0.5s ease-in';
+                gameArea.style.opacity = '1';
+            }, 500);
         });
         
         // Add debug logging
@@ -621,6 +736,13 @@
         // Game flow functions
         async function joinGame() {
             console.log('Join button clicked');
+            debugState.joinAttempts++;
+            debugState.events.push({
+                time: new Date().toISOString(),
+                event: 'join_attempt',
+                attempt: debugState.joinAttempts
+            });
+            updateDebugInfo();
             const joinButton = document.querySelector('button[onclick="joinGame()"]');
             const playerNameInput = document.getElementById('playerName');
             
@@ -638,6 +760,10 @@
                 
                 if (!playerName) {
                     throw new Error('Please enter your name');
+                }
+                
+                if (!roomId) {
+                    throw new Error('Invalid room ID');
                 }
                 
                 // Check if socket is available
@@ -658,11 +784,13 @@
                         
                         socket.once('connect', () => {
                             clearTimeout(timeout);
+                            console.log('Socket connected successfully');
                             resolve();
                         });
                         
                         socket.once('connect_error', (error) => {
                             clearTimeout(timeout);
+                            console.error('Socket connection error:', error);
                             reject(error);
                         });
                     });
@@ -675,6 +803,10 @@
                     const timeout = setTimeout(() => {
                         reject(new Error('Join request timed out'));
                     }, 10000);
+                    
+                    // Remove any existing listeners
+                    socket.off('join_confirmed');
+                    socket.off('join_error');
                     
                     // Listen for join confirmation
                     socket.once('join_confirmed', (data) => {
@@ -691,10 +823,17 @@
                         reject(new Error(error.message || 'Failed to join game'));
                     });
                     
-                    // Emit join request
+                    // Emit join request with all required data
+                    console.log('Emitting join_room event:', {
+                        room_id: roomId,
+                        player_name: playerName,
+                        is_host: false
+                    });
+                    
                     socket.emit('join_room', {
                         room_id: roomId,
-                        player_name: playerName
+                        player_name: playerName,
+                        is_host: false
                     });
                 });
                 
@@ -723,6 +862,18 @@
                 
             } catch (error) {
                 console.error('Error in joinGame:', error);
+                debugState.lastError = {
+                    time: new Date().toISOString(),
+                    message: error.message,
+                    stack: error.stack
+                };
+                debugState.events.push({
+                    time: new Date().toISOString(),
+                    event: 'join_error',
+                    error: error.message
+                });
+                updateDebugInfo();
+                
                 showNotification(error.message || 'Failed to join game. Please try again.', 'error');
                 
                 // Re-enable join button on error
@@ -730,6 +881,11 @@
                     joinButton.disabled = false;
                     joinButton.querySelector('.join-text').textContent = 'Join';
                     joinButton.querySelector('.loading-spinner').classList.add('hidden');
+                }
+                
+                // Show debug overlay on error
+                if (!debugVisible) {
+                    toggleDebug();
                 }
                 
                 // Reset button state

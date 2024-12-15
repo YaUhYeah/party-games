@@ -163,12 +163,22 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
 
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     async def join_game(request: Request, room_id: str):
+        print(f"Join request for room {room_id}")
         if room_id not in rooms:
+            print(f"Room {room_id} not found. Available rooms: {list(rooms.keys())}")
             return templates.TemplateResponse(
                 "error.html",
                 {"request": request, "error": "Room not found"}
             )
+        print(f"Rendering player template for room {room_id}")
         return templates.TemplateResponse(
             "player.html",
-            {"request": request, "room_id": room_id}
+            {
+                "request": request,
+                "room_id": room_id,
+                "debug": {
+                    "available_rooms": list(rooms.keys()),
+                    "player_count": len(rooms[room_id].players) if room_id in rooms else 0
+                }
+            }
         )
