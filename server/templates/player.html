@@ -110,6 +110,24 @@
                     this.updateDebugInfo();
                 });
 
+                // Handle game state updates
+                this.socket.on('game_state', (data) => {
+                    console.log('Game state update:', data);
+                    const gameArea = document.getElementById('gameArea');
+                    if (gameArea) {
+                        gameArea.innerHTML = ''; // Clear existing content
+                        
+                        // Create game interface based on game type
+                        if (data.game_type === 'trivia') {
+                            this.createTriviaInterface(data);
+                        } else if (data.game_type === 'chinese_whispers') {
+                            this.createDrawfulWhispersInterface(data);
+                        } else if (data.game_type === 'chase') {
+                            this.createChaseInterface(data);
+                        }
+                    }
+                });
+
                 this.socket.on('connect_error', (error) => {
                     console.error('Socket connection error:', error);
                     this.updateConnectionStatus('Connection error: ' + error.message, true);
@@ -256,6 +274,189 @@
                     if (e.key === 'Enter') {
                         this.joinGame();
                     }
+                });
+            },
+
+            // Game interface creation methods
+            createTriviaInterface(data) {
+                const gameArea = document.getElementById('gameArea');
+                if (!gameArea) return;
+
+                const question = data.current_question;
+                if (!question) return;
+
+                gameArea.innerHTML = `
+                    <div class="p-4">
+                        <div class="mb-4">
+                            <h2 class="text-2xl font-bold mb-2">Question ${data.round + 1}</h2>
+                            <p class="text-lg">${question.question}</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            ${question.options.map((option, index) => `
+                                <button onclick="window.gameState.submitAnswer(${index})"
+                                        class="p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all">
+                                    ${option}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            },
+
+            createDrawfulWhispersInterface(data) {
+                const gameArea = document.getElementById('gameArea');
+                if (!gameArea) return;
+
+                const isYourTurn = data.is_your_turn;
+                const word = data.current_word;
+
+                if (isYourTurn) {
+                    gameArea.innerHTML = `
+                        <div class="p-4">
+                            <h2 class="text-2xl font-bold mb-4">Your Turn to Draw!</h2>
+                            <p class="text-lg mb-4">Draw: ${word}</p>
+                            <canvas id="drawingCanvas" class="border-2 border-gray-300 rounded-xl w-full touch-none"
+                                    width="800" height="600"></canvas>
+                            <div class="mt-4 flex justify-between">
+                                <button onclick="window.gameState.clearCanvas()"
+                                        class="px-6 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-700">
+                                    Clear
+                                </button>
+                                <button onclick="window.gameState.submitDrawing()"
+                                        class="px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
+                                    Submit
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    this.initDrawingCanvas();
+                } else {
+                    gameArea.innerHTML = `
+                        <div class="p-4 text-center">
+                            <h2 class="text-2xl font-bold">Waiting for other player...</h2>
+                            <p class="text-lg mt-4">Current player is drawing</p>
+                        </div>
+                    `;
+                }
+            },
+
+            createChaseInterface(data) {
+                const gameArea = document.getElementById('gameArea');
+                if (!gameArea) return;
+
+                const isChaser = data.is_chaser;
+                const isContestant = data.is_contestant;
+                const question = data.current_question;
+
+                if (question) {
+                    gameArea.innerHTML = `
+                        <div class="p-4">
+                            <div class="mb-4">
+                                <h2 class="text-2xl font-bold">The Chase</h2>
+                                <p class="text-lg">${isChaser ? 'You are the Chaser!' : 
+                                                    isContestant ? 'You are the Contestant!' : 
+                                                    'Watching the Chase'}</p>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-lg font-bold">${question.question}</p>
+                            </div>
+                            <div class="grid grid-cols-1 gap-4">
+                                ${question.options.map((option, index) => `
+                                    <button onclick="window.gameState.submitChaseAnswer(${index})"
+                                            class="p-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all"
+                                            ${!isChaser && !isContestant ? 'disabled' : ''}>
+                                        ${option}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    gameArea.innerHTML = `
+                        <div class="p-4 text-center">
+                            <h2 class="text-2xl font-bold">Waiting for The Chase to begin...</h2>
+                        </div>
+                    `;
+                }
+            },
+
+            initDrawingCanvas() {
+                const canvas = document.getElementById('drawingCanvas');
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+                let isDrawing = false;
+                let lastX = 0;
+                let lastY = 0;
+
+                ctx.strokeStyle = '#000';
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                ctx.lineWidth = 5;
+
+                function draw(e) {
+                    if (!isDrawing) return;
+                    e.preventDefault();
+
+                    const rect = canvas.getBoundingClientRect();
+                    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+                    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                    [lastX, lastY] = [x, y];
+                }
+
+                canvas.addEventListener('mousedown', (e) => {
+                    isDrawing = true;
+                    const rect = canvas.getBoundingClientRect();
+                    [lastX, lastY] = [e.clientX - rect.left, e.clientY - rect.top];
+                });
+                canvas.addEventListener('touchstart', (e) => {
+                    isDrawing = true;
+                    const rect = canvas.getBoundingClientRect();
+                    [lastX, lastY] = [e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top];
+                });
+
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('touchmove', draw);
+                canvas.addEventListener('mouseup', () => isDrawing = false);
+                canvas.addEventListener('touchend', () => isDrawing = false);
+                canvas.addEventListener('mouseout', () => isDrawing = false);
+            },
+
+            clearCanvas() {
+                const canvas = document.getElementById('drawingCanvas');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            },
+
+            submitDrawing() {
+                const canvas = document.getElementById('drawingCanvas');
+                if (!canvas) return;
+                const imageData = canvas.toDataURL('image/png');
+                this.socket.emit('submit_drawing', {
+                    room_id: this.roomId,
+                    drawing: imageData
+                });
+            },
+
+            submitAnswer(index) {
+                this.socket.emit('submit_answer', {
+                    room_id: this.roomId,
+                    answer_index: index,
+                    timestamp: Date.now()
+                });
+            },
+
+            submitChaseAnswer(index) {
+                this.socket.emit('submit_chase_answer', {
+                    room_id: this.roomId,
+                    answer_index: index,
+                    timestamp: Date.now()
                 });
             }
         };
