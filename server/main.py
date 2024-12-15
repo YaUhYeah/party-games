@@ -68,23 +68,119 @@ MUSIC_CONFIG = {
 
 # Game topics and questions
 TRIVIA_QUESTIONS = [
+    # Science & Space
     {
-        'question': 'What is the capital of France?',
-        'options': ['London', 'Berlin', 'Paris', 'Madrid'],
-        'correct': 'Paris',
-        'category': 'Geography'
+        'question': 'What is the largest planet in our solar system?',
+        'options': ['Jupiter', 'Saturn', 'Neptune', 'Mars'],
+        'correct': 'Jupiter',
+        'category': 'Science'
     },
     {
         'question': 'Which planet is known as the Red Planet?',
-        'options': ['Venus', 'Mars', 'Jupiter', 'Saturn'],
+        'options': ['Mars', 'Venus', 'Jupiter', 'Mercury'],
         'correct': 'Mars',
-        'category': 'Space'
+        'category': 'Science'
     },
     {
-        'question': 'What is 2 + 2?',
-        'options': ['3', '4', '5', '6'],
-        'correct': '4',
-        'category': 'Math'
+        'question': 'What is the chemical symbol for gold?',
+        'options': ['Au', 'Ag', 'Fe', 'Cu'],
+        'correct': 'Au',
+        'category': 'Science'
+    },
+    # Geography
+    {
+        'question': 'Which country has the longest coastline in the world?',
+        'options': ['Canada', 'Russia', 'Indonesia', 'Australia'],
+        'correct': 'Canada',
+        'category': 'Geography'
+    },
+    {
+        'question': 'What is the capital of Australia?',
+        'options': ['Canberra', 'Sydney', 'Melbourne', 'Perth'],
+        'correct': 'Canberra',
+        'category': 'Geography'
+    },
+    {
+        'question': 'Which is the largest ocean on Earth?',
+        'options': ['Pacific', 'Atlantic', 'Indian', 'Arctic'],
+        'correct': 'Pacific',
+        'category': 'Geography'
+    },
+    # Entertainment
+    {
+        'question': 'Who played Iron Man in the Marvel Cinematic Universe?',
+        'options': ['Robert Downey Jr.', 'Chris Evans', 'Chris Hemsworth', 'Mark Ruffalo'],
+        'correct': 'Robert Downey Jr.',
+        'category': 'Entertainment'
+    },
+    {
+        'question': 'Which band performed "Bohemian Rhapsody"?',
+        'options': ['Queen', 'The Beatles', 'Led Zeppelin', 'Pink Floyd'],
+        'correct': 'Queen',
+        'category': 'Entertainment'
+    },
+    {
+        'question': 'What is the highest-grossing film of all time?',
+        'options': ['Avatar', 'Avengers: Endgame', 'Titanic', 'Star Wars: Episode VII'],
+        'correct': 'Avatar',
+        'category': 'Entertainment'
+    },
+    # History
+    {
+        'question': 'In which year did World War II end?',
+        'options': ['1945', '1944', '1946', '1943'],
+        'correct': '1945',
+        'category': 'History'
+    },
+    {
+        'question': 'Who was the first President of the United States?',
+        'options': ['George Washington', 'Thomas Jefferson', 'John Adams', 'Benjamin Franklin'],
+        'correct': 'George Washington',
+        'category': 'History'
+    },
+    {
+        'question': 'Which ancient civilization built the pyramids of Giza?',
+        'options': ['Egyptians', 'Greeks', 'Romans', 'Mayans'],
+        'correct': 'Egyptians',
+        'category': 'History'
+    },
+    # Sports
+    {
+        'question': 'Which country won the first FIFA World Cup in 1930?',
+        'options': ['Uruguay', 'Brazil', 'Argentina', 'Italy'],
+        'correct': 'Uruguay',
+        'category': 'Sports'
+    },
+    {
+        'question': 'In which sport would you perform a slam dunk?',
+        'options': ['Basketball', 'Volleyball', 'Tennis', 'Soccer'],
+        'correct': 'Basketball',
+        'category': 'Sports'
+    },
+    {
+        'question': 'How many players are on a standard soccer team during a match?',
+        'options': ['11', '10', '12', '9'],
+        'correct': '11',
+        'category': 'Sports'
+    },
+    # Technology
+    {
+        'question': 'Who co-founded Apple Computer with Steve Jobs?',
+        'options': ['Steve Wozniak', 'Bill Gates', 'Mark Zuckerberg', 'Jeff Bezos'],
+        'correct': 'Steve Wozniak',
+        'category': 'Technology'
+    },
+    {
+        'question': 'What does "HTTP" stand for?',
+        'options': ['Hypertext Transfer Protocol', 'High Tech Transfer Protocol', 'Hypertext Technical Program', 'High Tech Transport Program'],
+        'correct': 'Hypertext Transfer Protocol',
+        'category': 'Technology'
+    },
+    {
+        'question': 'Which programming language is known as the "language of the web"?',
+        'options': ['JavaScript', 'Python', 'Java', 'C++'],
+        'correct': 'JavaScript',
+        'category': 'Technology'
     }
 ]
 
@@ -126,11 +222,14 @@ sio = socketio.AsyncServer(
 
 # Create Socket.IO app with FastAPI as the other_asgi_app
 def create_app():
-    app = socketio.ASGIApp(
-        socketio_server=sio,
-        other_asgi_app=fastapi_app
+    socket_app = socketio.ASGIApp(
+        sio,
+        fastapi_app,
+        static_files={
+            '/': {'content_type': 'text/html', 'filename': 'index.html'}
+        }
     )
-    return app
+    return socket_app
 
 # Mount static files and templates
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
