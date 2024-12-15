@@ -748,23 +748,29 @@
         });
 
         socket.on('game_started', (data) => {
+            document.getElementById('gameArea').classList.remove('hidden');
+            document.getElementById('nameInput').classList.add('hidden');
+            document.getElementById('drawingGame').classList.add('hidden');
+            document.getElementById('triviaGame').classList.add('hidden');
+            document.getElementById('guessingPhase').classList.add('hidden');
+            document.getElementById('chaseGame').classList.add('hidden');
+
             if (data.game_type === 'chase') {
-                document.getElementById('gameArea').classList.remove('hidden');
-                document.getElementById('nameInput').classList.add('hidden');
-                document.getElementById('drawingGame').classList.add('hidden');
-                document.getElementById('triviaGame').classList.add('hidden');
                 document.getElementById('chaseGame').classList.remove('hidden');
                 document.getElementById('chaseSetup').classList.remove('hidden');
                 document.getElementById('chaseQuestion').classList.add('hidden');
                 document.getElementById('categorySelect').classList.add('hidden');
                 showNotification('Choose your role in The Chase!', 'info');
-            } else {
-                updateGameState(data);
+            } else if (data.game_type === 'chinese_whispers') {
+                document.getElementById('drawingGame').classList.remove('hidden');
                 if (data.first_player === playerName) {
                     showNotification('Game is starting! You draw first!', 'info');
                 } else {
                     showNotification(`Game is starting! ${data.first_player} draws first!`, 'info');
                 }
+            } else if (data.game_type === 'trivia') {
+                document.getElementById('triviaGame').classList.remove('hidden');
+                showNotification('Trivia game is starting!', 'info');
             }
         });
 
@@ -825,40 +831,26 @@
 
         // UI update functions
         function updateGameState(data) {
-            const gameArea = document.getElementById('gameArea');
-            if (data.game_type === 'chinese_whispers') {
-                gameArea.innerHTML = `
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl font-bold text-indigo-600">Drawing Game</h2>
-                        <p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>
-                        <div id="timer" class="timer"></div>
-                    </div>
-                    <div id="drawingGame" class="${isMyTurn ? 'active' : ''}">
-                        <div class="drawing-controls">
-                            <input type="color" id="colorPicker" class="color-picker">
-                            <input type="range" id="brushSize" min="1" max="20" value="5" class="brush-size">
-                            <button onclick="clearCanvas()" class="game-button">Clear</button>
-                        </div>
-                        <canvas id="canvas"></canvas>
-                        <button onclick="submitDrawing()" class="game-button mt-4 w-full">
-                            Submit Drawing
-                        </button>
-                    </div>
-                `;
+            // Hide all game sections first
+            document.getElementById('drawingGame').classList.add('hidden');
+            document.getElementById('triviaGame').classList.add('hidden');
+            document.getElementById('chaseGame').classList.add('hidden');
+            document.getElementById('guessingPhase').classList.add('hidden');
+
+            // Show appropriate game section
+            if (data.game_type === 'chase') {
+                document.getElementById('chaseGame').classList.remove('hidden');
+                document.getElementById('chaseSetup').classList.remove('hidden');
+                document.getElementById('chaseQuestion').classList.add('hidden');
+                document.getElementById('categorySelect').classList.add('hidden');
+            } else if (data.game_type === 'chinese_whispers') {
+                document.getElementById('drawingGame').classList.remove('hidden');
+                if (isMyTurn) {
+                    document.getElementById('drawingGame').classList.add('active');
+                }
                 setupCanvas();
-            } else {
-                // Trivia game UI
-                gameArea.innerHTML = `
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl font-bold text-indigo-600">Trivia Game</h2>
-                        <p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>
-                        <div id="timer" class="timer"></div>
-                    </div>
-                    <div id="triviaGame">
-                        <div id="questionContainer" class="text-xl mb-4"></div>
-                        <div id="optionsContainer" class="space-y-2"></div>
-                    </div>
-                `;
+            } else if (data.game_type === 'trivia') {
+                document.getElementById('triviaGame').classList.remove('hidden');
             }
         }
 
