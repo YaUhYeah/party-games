@@ -198,7 +198,7 @@
             </div>
 
             <!-- Game Area -->
-            <div id="gameArea">
+            <div id="gameArea" class="hidden">
                 <!-- Drawing Game -->
                 <div id="drawingGame" class="hidden">
                     <h2 class="text-2xl font-bold text-indigo-600 mb-4">Draw: <span id="wordToDraw"></span></h2>
@@ -477,7 +477,8 @@
             
             socket.emit('join_room', { room_id: roomId, player_name: playerName });
             document.getElementById('nameInput').classList.add('hidden');
-            document.getElementById('gameArea').classList.remove('hidden');
+            // Keep game area hidden until game starts
+            document.getElementById('gameArea').classList.add('hidden');
             setupCanvas();
         }
 
@@ -819,13 +820,16 @@
         });
 
         socket.on('game_started', (data) => {
-            document.getElementById('gameArea').classList.remove('hidden');
+            // First hide all game elements
             document.getElementById('nameInput').classList.add('hidden');
             document.getElementById('drawingGame').classList.add('hidden');
             document.getElementById('triviaGame').classList.add('hidden');
             document.getElementById('guessingPhase').classList.add('hidden');
             document.getElementById('chaseGame').classList.add('hidden');
-
+            
+            // Show game area and appropriate game type
+            document.getElementById('gameArea').classList.remove('hidden');
+            
             if (data.game_type === 'chase') {
                 document.getElementById('chaseGame').classList.remove('hidden');
                 document.getElementById('chaseSetup').classList.remove('hidden');
