@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .models.game_room import GameRoom
+from server.models.game_room import GameRoom
 
 # Global state
 rooms: Dict[str, GameRoom] = {}
@@ -57,8 +57,8 @@ def create_app() -> socketio.ASGIApp:
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
     # Import and register routes and socket events
-    from .routes import register_routes
-    from .sockets import register_socket_events
+    from server.routes import register_routes
+    from server.sockets import register_socket_events
 
     register_routes(app, templates, rooms)
     register_socket_events(sio, rooms)

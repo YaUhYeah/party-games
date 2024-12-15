@@ -3,9 +3,9 @@ import random
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
-from ..config.game_config import GAME_CONFIG, GAME_TOPICS
-from ..config.questions import TRIVIA_QUESTIONS, CHASE_QUESTIONS
-from ..database import get_db, User, Achievement
+from server.config.game_config import GAME_CONFIG, GAME_TOPICS
+from server.config.questions import TRIVIA_QUESTIONS, CHASE_QUESTIONS
+from server.database import get_db, User, Achievement
 
 class GameRoom:
     def __init__(self, room_id: str):
