@@ -324,7 +324,10 @@
     </div>
 
     <script>
-        const socket = io();
+        const socket = io({
+            reconnectionAttempts: 5,
+            timeout: 10000
+        });
         const roomId = "{{ room_id }}";
         let canvas, ctx;
         let isDrawing = false;
@@ -337,6 +340,14 @@
         let isMyTurn = false;
         let selectedAnswer = null;
         let playerRole = null;
+        let hasJoined = false;
+
+        // Add keypress event listener for Enter key on player name input
+        document.getElementById('playerName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinGame();
+            }
+        });
 
         // Audio management
         // No sound effects on client side - all sounds come from host TV
@@ -469,17 +480,16 @@
 
         // Game flow functions
         function joinGame() {
-            const playerName = document.getElementById('playerName').value;
+            if (hasJoined) return; // Prevent multiple joins
+            
+            const playerName = document.getElementById('playerName').value.trim();
             if (!playerName) {
                 showNotification('Please enter your name', 'error');
                 return;
             }
             
+            console.log('Attempting to join room:', roomId, 'with name:', playerName);
             socket.emit('join_room', { room_id: roomId, player_name: playerName });
-            document.getElementById('nameInput').classList.add('hidden');
-            // Keep game area hidden until game starts
-            document.getElementById('gameArea').classList.add('hidden');
-            setupCanvas();
         }
 
         function submitDrawing() {
@@ -795,7 +805,24 @@
 
         // Socket event handlers
         socket.on('connect', () => {
+            console.log('Connected to server');
             showNotification('Connected to server', 'success');
+        });
+
+        socket.on('join_success', (data) => {
+            console.log('Successfully joined room:', data);
+            hasJoined = true;
+            document.getElementById('nameInput').classList.add('hidden');
+            // Keep game area hidden until game starts
+            document.getElementById('gameArea').classList.add('hidden');
+            showNotification('Successfully joined the game!', 'success');
+            setupCanvas();
+        });
+
+        socket.on('join_error', (data) => {
+            console.log('Failed to join room:', data);
+            hasJoined = false;
+            showNotification(data.message || 'Failed to join the game', 'error');
         });
 
         socket.on('chase_cancelled', (data) => {
@@ -814,7 +841,18 @@
             document.getElementById('guessingPhase').classList.add('hidden');
         });
 
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            showNotification('Failed to connect to server. Please try again.', 'error');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            showNotification('Disconnected from server. Attempting to reconnect...', 'error');
+        });
+
         socket.on('error', (data) => {
+            console.error('Socket error:', data);
             showNotification(data.message, 'error');
             playSound('error');
         });
