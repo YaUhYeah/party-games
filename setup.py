@@ -14,6 +14,5 @@ setup(
         "python-multipart",
         "pillow",
         "requests",
-        "netifaces",
     ],
 )

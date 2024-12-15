@@ -47,11 +47,16 @@ def create_app() -> socketio.ASGIApp:
     STATIC_DIR = os.path.join(SERVER_DIR, "static")
     TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
 
-    # Create necessary directories
-    os.makedirs(STATIC_DIR, exist_ok=True)
-    os.makedirs(os.path.join(STATIC_DIR, "music"), exist_ok=True)
-    os.makedirs(os.path.join(STATIC_DIR, "profiles"), exist_ok=True)
-    os.makedirs(os.path.join(STATIC_DIR, "qr"), exist_ok=True)
+    # Create necessary directories with proper permissions
+    def ensure_dir(path):
+        if not os.path.exists(path):
+            os.makedirs(path, mode=0o777, exist_ok=True)
+        os.chmod(path, 0o777)  # Ensure write permissions
+
+    ensure_dir(STATIC_DIR)
+    ensure_dir(os.path.join(STATIC_DIR, "music"))
+    ensure_dir(os.path.join(STATIC_DIR, "profiles"))
+    ensure_dir(os.path.join(STATIC_DIR, "qr"))
 
     # Mount static files
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
