@@ -66,7 +66,28 @@ MUSIC_CONFIG = {
     }
 }
 
-# Game topics
+# Game topics and questions
+TRIVIA_QUESTIONS = [
+    {
+        'question': 'What is the capital of France?',
+        'options': ['London', 'Berlin', 'Paris', 'Madrid'],
+        'correct': 'Paris',
+        'category': 'Geography'
+    },
+    {
+        'question': 'Which planet is known as the Red Planet?',
+        'options': ['Venus', 'Mars', 'Jupiter', 'Saturn'],
+        'correct': 'Mars',
+        'category': 'Space'
+    },
+    {
+        'question': 'What is 2 + 2?',
+        'options': ['3', '4', '5', '6'],
+        'correct': '4',
+        'category': 'Math'
+    }
+]
+
 GAME_TOPICS = {
     'animals': ['elephant', 'giraffe', 'penguin', 'kangaroo', 'octopus'],
     'food': ['pizza', 'sushi', 'hamburger', 'ice cream', 'tacos'],
