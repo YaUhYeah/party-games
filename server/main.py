@@ -591,6 +591,22 @@ async def join_room(sid, data):
             rooms[room_id] = GameRoom(room_id)
 
         room = rooms[room_id]
+        
+        # Function to broadcast updated player list
+        async def broadcast_player_list():
+            player_list = [
+                {
+                    'name': p['name'],
+                    'is_host': p.get('is_host', False),
+                    'connected': p.get('connected', True),
+                    'score': room.scores.get(s, 0)
+                }
+                for s, p in room.players.items()
+                if p.get('connected', True)  # Only include connected players
+            ]
+            await sio.emit('player_list_update', {
+                'players': player_list
+            }, room=room_id)
 
         if is_host:
             if room.host_sid:
@@ -610,28 +626,43 @@ async def join_room(sid, data):
                 'room_id': room_id,
                 'is_host': True
             }, room=sid)
+            await broadcast_player_list()  # Broadcast updated player list
             return
 
         # Check if username is taken by an active player
-        for s, p in room.players.items():
-            if not p.get('is_host') and p['name'] == player_name and p['connected']:
-                await sio.emit('join_error', {
-                    'message': 'Username already taken'
-                }, room=sid)
-                return
-
-        # Check if it's a rejoin case
         existing_sid = None
         for s, p in room.players.items():
-            if not p.get('is_host') and p['name'] == player_name and not p['connected']:
-                existing_sid = s
-                break
+            if not p.get('is_host') and p['name'] == player_name:
+                if p.get('connected', True):
+                    await sio.emit('join_error', {
+                        'message': 'Username already taken'
+                    }, room=sid)
+                    return
+                else:
+                    # Found a disconnected player with the same name - allow reconnection
+                    existing_sid = s
+                    break
 
         if existing_sid:
-            # Remove old connection
+            # Update the existing player entry
             if existing_sid in room.players:
+                old_data = room.players[existing_sid]
                 del room.players[existing_sid]
                 await sio.leave_room(existing_sid, room_id)
+                
+                # Preserve scores and other data
+                room.players[sid] = {
+                    'name': player_name,
+                    'connected': True,
+                    'is_host': False,
+                    'score': room.scores.get(existing_sid, 0)
+                }
+                if 'profile' in old_data:
+                    room.players[sid]['profile'] = old_data['profile']
+                
+                # Update scores mapping
+                if existing_sid in room.scores:
+                    room.scores[sid] = room.scores.pop(existing_sid)
 
         # Check if username exists or create new user
         user = room.db.query(User).filter(User.username == player_name).first()
@@ -647,6 +678,16 @@ async def join_room(sid, data):
                 room.db.commit()
             except Exception as e:
                 print(f"Error processing profile picture: {e}")
+                
+        # If not reconnecting, create new player entry
+        if not existing_sid:
+            room.players[sid] = {
+                'name': player_name,
+                'connected': True,
+                'is_host': False,
+                'score': 0,
+                'user_id': user.id
+            }
 
         room.db.refresh(user)
 
@@ -662,19 +703,32 @@ async def join_room(sid, data):
 
         await sio.enter_room(sid, room_id)
 
-        # Send current game state to rejoining player
-        if room.game_state != 'waiting':
-            state_data = {
-                'state': room.game_state,
-                'game_type': room.current_game,
-                'round': room.round,
-                'total_rounds': room.total_rounds,
+        # Get current player list
+        player_list = [
+            {
+                'name': p['name'],
+                'is_host': p.get('is_host', False),
+                'connected': p.get('connected', True),
+                'score': room.scores.get(s, 0)
             }
+            for s, p in room.players.items()
+            if p.get('connected', True)  # Only include connected players
+        ]
 
+        # Prepare game state data for rejoining player
+        state_data = {
+            'state': room.game_state,
+            'game_type': room.current_game,
+            'round': room.round,
+            'total_rounds': room.total_rounds,
+            'current_players': player_list
+        }
+
+        if room.game_state != 'waiting':
             if room.current_game == 'chinese_whispers':
                 state_data.update({
                     'current_word': room.current_word,
-                    'is_your_turn': room.player_order[room.current_player_index] == sid
+                    'is_your_turn': room.player_order[room.current_player_index] == sid if room.player_order else False
                 })
             elif room.current_game == 'trivia':
                 state_data['current_question'] = room.current_question
@@ -1167,11 +1221,31 @@ async def get_latest_achievements(room: GameRoom):
 @sio.event
 async def disconnect(sid):
     print(f"Client disconnected: {sid}")
-    for room in rooms.values():
+    for room_id, room in rooms.items():
         if sid in room.players:
             player_data = room.players[sid]
             # Mark player as disconnected instead of removing
             player_data['connected'] = False
+
+            # Broadcast updated player list
+            player_list = [
+                {
+                    'name': p['name'],
+                    'is_host': p.get('is_host', False),
+                    'connected': p.get('connected', True),
+                    'score': room.scores.get(s, 0)
+                }
+                for s, p in room.players.items()
+            ]
+            await sio.emit('player_list_update', {
+                'players': player_list
+            }, room=room_id)
+
+            # If this was the host, notify other players
+            if sid == room.host_sid:
+                await sio.emit('game_cancelled', {
+                    'reason': 'Host disconnected from the game'
+                }, room=room_id)
 
             # Handle special cases based on game state
             if room.current_game == 'chase':

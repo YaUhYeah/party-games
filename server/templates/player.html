@@ -368,8 +368,13 @@
                     </button>
                 </div>
 
-                <!-- Scoreboard -->
+                <!-- Connected Players and Scoreboard -->
                 <div id="scoreboard" class="mt-8">
+                    <h3 class="text-xl font-bold text-indigo-600 mb-2">Connected Players</h3>
+                    <div id="playerList" class="mb-4 space-y-2">
+                        <!-- Player list will be populated here -->
+                    </div>
+                    
                     <h3 class="text-xl font-bold text-indigo-600 mb-2">Scores</h3>
                     <div id="scoreList" class="space-y-2"></div>
                 </div>
@@ -931,8 +936,14 @@
             
             if (nameInput && gameArea) {
                 nameInput.classList.add('hidden');
-                gameArea.classList.add('hidden');
-                showNotification('Successfully joined the game!', 'success');
+                gameArea.classList.remove('hidden');  // Changed from add to remove
+                
+                // Update player list if provided in join response
+                if (data.current_players) {
+                    updatePlayerList(data.current_players);
+                }
+                
+                showNotification(`Welcome to the game, ${data.player_name}!`, 'success');
                 setupCanvas();
             } else {
                 console.error('Required UI elements not found');
@@ -985,6 +996,25 @@
             
             // Clear any game state that should be reset
             isMyTurn = false;
+            
+            // Clear the player list to show disconnected state
+            const playerList = document.getElementById('playerList');
+            if (playerList) {
+                playerList.innerHTML = '<div class="text-gray-500 text-center p-4">Disconnected from server...</div>';
+            }
+            
+            // Add reconnect button if needed
+            const gameArea = document.getElementById('gameArea');
+            if (gameArea && hasJoined) {
+                const reconnectBtn = document.createElement('button');
+                reconnectBtn.className = 'mt-4 bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 transition';
+                reconnectBtn.textContent = 'Reconnect';
+                reconnectBtn.onclick = () => {
+                    socket.connect();
+                    reconnectBtn.remove();
+                };
+                gameArea.insertBefore(reconnectBtn, gameArea.firstChild);
+            }
             clearInterval(timerInterval);
             
             // Attempt to reconnect
@@ -1000,6 +1030,35 @@
             showNotification(data.message, 'error');
             playSound('error');
         });
+
+        // Handle player list updates
+        socket.on('player_list_update', (data) => {
+            console.log('Player list update received:', data);
+            updatePlayerList(data.players);
+        });
+
+        // Function to update the player list UI
+        function updatePlayerList(players) {
+            const playerList = document.getElementById('playerList');
+            if (!playerList) return;
+
+            playerList.innerHTML = players.map(player => `
+                <div class="flex justify-between items-center p-2 ${player.connected ? 'bg-white' : 'bg-gray-100'} rounded-lg shadow">
+                    <div class="flex items-center">
+                        <span class="text-lg ${player.is_host ? 'text-indigo-600 font-bold' : ''} ${!player.connected ? 'text-gray-500' : ''}">
+                            ${player.name}
+                            ${player.is_host ? ' (Host)' : ''}
+                            ${!player.connected ? ' (Disconnected)' : ''}
+                        </span>
+                    </div>
+                    ${!player.is_host ? `
+                        <div class="text-${player.connected ? 'gray-600' : 'gray-400'}">
+                            Score: ${player.score || 0}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
 
         socket.on('game_started', (data) => {
             // First hide all game elements
