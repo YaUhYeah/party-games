@@ -193,35 +193,36 @@ GAME_TOPICS = {
 
 from .database import get_db, User, GameScore, Achievement
 
-# Create FastAPI app first
-fastapi_app = FastAPI(
-    title="Party Games Hub",
-    description="A collection of fun multiplayer party games",
-    version="1.0.0"
-)
-
-# Configure CORS middleware
-fastapi_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Configure Socket.IO with proper CORS and error handling
-sio = socketio.AsyncServer(
-    async_mode='asgi',
-    cors_allowed_origins='*',
-    ping_timeout=35,
-    ping_interval=25,
-    max_http_buffer_size=1e8,  # 100MB max message size
-    logger=True,
-    engineio_logger=True
-)
-
-# Create Socket.IO app with FastAPI as the other_asgi_app
+# Create FastAPI app
 def create_app():
+    # Create FastAPI app first
+    fastapi_app = FastAPI(
+        title="Party Games Hub",
+        description="A collection of fun multiplayer party games",
+        version="1.0.0"
+    )
+
+    # Configure CORS middleware
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Configure Socket.IO with proper CORS and error handling
+    sio = socketio.AsyncServer(
+        async_mode='asgi',
+        cors_allowed_origins='*',
+        ping_timeout=35,
+        ping_interval=25,
+        max_http_buffer_size=1e8,  # 100MB max message size
+        logger=True,
+        engineio_logger=True
+    )
+
+    # Create Socket.IO app with FastAPI as the other_asgi_app
     socket_app = socketio.ASGIApp(
         sio,
         fastapi_app,
@@ -229,24 +230,363 @@ def create_app():
             '/': {'content_type': 'text/html', 'filename': 'index.html'}
         }
     )
+
+    # Mount static files and templates
+    global SERVER_DIR, STATIC_DIR, TEMPLATES_DIR
+    SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+    STATIC_DIR = os.path.join(SERVER_DIR, "static")
+    TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
+
+    # Create necessary directories if they don't exist
+    os.makedirs(STATIC_DIR, exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "music"), exist_ok=True)
+    os.makedirs(os.path.join(STATIC_DIR, "profiles"), exist_ok=True)
+
+    # Mount static files
+    fastapi_app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    global templates
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+    # Register routes and socket events
+    register_routes(fastapi_app)
+    register_socket_events(sio)
+
     return socket_app
 
-# Mount static files and templates
-SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(SERVER_DIR, "static")
-TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
-
-# Create necessary directories if they don't exist
-os.makedirs(STATIC_DIR, exist_ok=True)
-os.makedirs(os.path.join(STATIC_DIR, "music"), exist_ok=True)
-os.makedirs(os.path.join(STATIC_DIR, "profiles"), exist_ok=True)
-
-# Mount static files
-fastapi_app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-templates = Jinja2Templates(directory=TEMPLATES_DIR)
+# Helper functions
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        return "localhost"
 
 # Game state
 rooms = {}
+
+def register_routes(app):
+    @app.post("/api/users")
+    async def create_user(username: str, profile_picture: Optional[str] = None, db: Session = Depends(get_db)):
+        db_user = db.query(User).filter(User.username == username).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Username already registered")
+
+        user = User(username=username)
+        if profile_picture:
+            try:
+                image_data = base64.b64decode(profile_picture.split(',')[1])
+                user.profile_picture = image_data
+            except:
+                raise HTTPException(status_code=400, detail="Invalid profile picture format")
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return {"id": user.id, "username": user.username}
+
+    @app.get("/api/users/{username}")
+    async def get_user(username: str, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        profile_picture = None
+        if user.profile_picture:
+            profile_picture = base64.b64encode(user.profile_picture).decode('utf-8')
+
+        return {
+            "id": user.id,
+            "username": user.username,
+            "profile_picture": profile_picture,
+            "games_played": user.games_played,
+            "total_score": user.total_score,
+            "highest_score": user.highest_score
+        }
+
+    @app.get("/api/leaderboard")
+    async def get_leaderboard(game_type: Optional[str] = None, db: Session = Depends(get_db)):
+        if game_type:
+            scores = db.query(GameScore).filter(GameScore.game_type == game_type) \
+                .order_by(GameScore.score.desc()).limit(10).all()
+            return [{
+                "username": db.query(User).filter(User.id == score.user_id).first().username,
+                "score": score.score,
+                "played_at": score.played_at
+            } for score in scores]
+        else:
+            users = db.query(User).order_by(User.highest_score.desc()).limit(10).all()
+            return [{
+                "username": user.username,
+                "highest_score": user.highest_score,
+                "games_played": user.games_played
+            } for user in users]
+
+    @app.get("/api/achievements/{username}")
+    async def get_achievements(username: str, db: Session = Depends(get_db)):
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        achievements = db.query(Achievement).filter(Achievement.user_id == user.id).all()
+        return [{
+            "name": achievement.name,
+            "description": achievement.description,
+            "unlocked_at": achievement.unlocked_at
+        } for achievement in achievements]
+
+    @app.get("/", response_class=HTMLResponse)
+    async def home(request: Request):
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request}
+        )
+
+    @app.get("/host", response_class=HTMLResponse)
+    async def host_game(request: Request):
+        room_id = ''.join(random.choices('0123456789', k=6))
+        rooms[room_id] = GameRoom(room_id)
+
+        # Get local IP address
+        local_ip = get_local_ip()
+        host = f"{local_ip}:8000"
+
+        # Generate QR code
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(f'http://{host}/join/{room_id}')
+        qr.make(fit=True)
+        qr_image = qr.make_image(fill_color="black", back_color="white")
+        qr_path = os.path.join(STATIC_DIR, f'qr_{room_id}.png')
+        qr_image.save(qr_path)
+
+        return templates.TemplateResponse(
+            "host.html",
+            {"request": request, "room_id": room_id}
+        )
+
+    @app.get("/join/{room_id}", response_class=HTMLResponse)
+    async def join_game(request: Request, room_id: str):
+        if room_id not in rooms:
+            return templates.TemplateResponse(
+                "error.html",
+                {"request": request, "error": "Room not found"}
+            )
+        return templates.TemplateResponse(
+            "player.html",
+            {"request": request, "room_id": room_id}
+        )
+
+def register_socket_events(sio):
+    @sio.event
+    async def connect(sid, environ):
+        print(f"Client connected: {sid}")
+
+    @sio.event
+    async def join_room(sid, data):
+        try:
+            room_id = data['room_id']
+            is_host = data.get('is_host', False)
+            player_name = 'Host' if is_host else data['player_name']
+            profile_picture = data.get('profile_picture')
+
+            print(f"Join room request: {data}")
+
+            # Create room if it doesn't exist
+            if room_id not in rooms:
+                print(f"Creating new room: {room_id}")
+                rooms[room_id] = GameRoom(room_id)
+
+            room = rooms[room_id]
+
+            if is_host:
+                if room.host_sid:
+                    # Remove old host
+                    if room.host_sid in room.players:
+                        del room.players[room.host_sid]
+                        await sio.leave_room(room.host_sid, room_id)
+                room.host_sid = sid
+                room.players[sid] = {
+                    'name': 'Host',
+                    'is_host': True,
+                    'connected': True
+                }
+                await sio.enter_room(sid, room_id)
+                await sio.emit('join_success', {
+                    'player_name': 'Host',
+                    'room_id': room_id,
+                    'is_host': True
+                }, room=sid)
+                return
+
+            # Check if username is taken by an active player
+            for s, p in room.players.items():
+                if not p.get('is_host') and p['name'] == player_name and p['connected']:
+                    await sio.emit('join_error', {
+                        'message': 'Username already taken'
+                    }, room=sid)
+                    return
+
+            # Check if it's a rejoin case
+            existing_sid = None
+            for s, p in room.players.items():
+                if not p.get('is_host') and p['name'] == player_name and not p['connected']:
+                    existing_sid = s
+                    break
+
+            if existing_sid:
+                # Remove old connection
+                if existing_sid in room.players:
+                    del room.players[existing_sid]
+                    await sio.leave_room(existing_sid, room_id)
+
+            # Check if username exists or create new user
+            user = room.db.query(User).filter(User.username == player_name).first()
+            if not user:
+                user = User(username=player_name)
+                room.db.add(user)
+                room.db.commit()
+
+            if profile_picture:
+                try:
+                    image_data = base64.b64decode(profile_picture.split(',')[1])
+                    user.profile_picture = image_data
+                    room.db.commit()
+                except Exception as e:
+                    print(f"Error processing profile picture: {e}")
+
+            room.db.refresh(user)
+
+            # Store user info in room
+            room.players[sid] = {
+                'name': player_name,
+                'user_id': user.id,
+                'profile': profile_picture or '',
+                'score': 0,
+                'connected': True,
+                'is_host': False
+            }
+
+            await sio.enter_room(sid, room_id)
+
+            # Send current game state to rejoining player
+            if room.game_state != 'waiting':
+                state_data = {
+                    'state': room.game_state,
+                    'game_type': room.current_game,
+                    'round': room.round,
+                    'total_rounds': room.total_rounds,
+                }
+
+                if room.current_game == 'chinese_whispers':
+                    state_data.update({
+                        'current_word': room.current_word,
+                        'is_your_turn': room.player_order[room.current_player_index] == sid
+                    })
+                elif room.current_game == 'trivia':
+                    state_data['current_question'] = room.current_question
+                elif room.current_game == 'chase':
+                    state_data.update({
+                        'chase_category': room.chase_category,
+                        'chase_position': room.chase_position,
+                        'is_chaser': room.chaser == sid,
+                        'is_contestant': room.chase_contestant == sid,
+                        'current_question': room.chase_questions[0] if room.chase_questions else None
+                    })
+
+                await sio.emit('game_state', state_data, room=sid)
+
+            # Update all clients with new player list
+            player_list = []
+            for player_sid, player_data in room.players.items():
+                if player_data['connected'] and not player_data.get('is_host'):
+                    player_list.append({
+                        'name': player_data['name'],
+                        'score': player_data.get('score', 0)
+                    })
+
+            await sio.emit('player_joined', {
+                'players': player_list,
+                'new_player': player_name
+            }, room=room_id)
+
+            print(f"Player {player_name} successfully joined room {room_id}")
+
+        except Exception as e:
+            print(f"Error joining room: {e}")
+            await sio.emit('join_error', {
+                'message': f"Failed to join room: {str(e)}"
+            }, room=sid)
+
+    @sio.event
+    async def disconnect(sid):
+        print(f"Client disconnected: {sid}")
+        for room in rooms.values():
+            if sid in room.players:
+                player_data = room.players[sid]
+                # Mark player as disconnected instead of removing
+                player_data['connected'] = False
+
+                # Handle special cases based on game state
+                if room.current_game == 'chase':
+                    if sid == room.chaser:
+                        # Chaser disconnected, reset chase game
+                        room.chaser = None
+                        room.chase_category = None
+                        room.chase_contestant = None
+                        room.game_state = 'waiting'
+                        await sio.emit('chase_cancelled', {
+                            'reason': 'Chaser disconnected'
+                        }, room=room.room_id)
+                    elif sid == room.chase_contestant:
+                        # Contestant disconnected, reset current chase
+                        room.chase_contestant = None
+                        room.game_state = 'chase_setup'
+                        await sio.emit('chase_cancelled', {
+                            'reason': 'Contestant disconnected'
+                        }, room=room.room_id)
+
+                # Update player list for all clients
+                player_list = []
+                for p_sid, p_data in room.players.items():
+                    if p_data['connected'] and not p_data.get('is_host'):
+                        player_list.append({
+                            'name': p_data['name'],
+                            'score': p_data.get('score', 0)
+                        })
+
+                await sio.emit('player_left', {
+                    'players': player_list,
+                    'disconnected_player': player_data['name']
+                }, room=room.room_id)
+
+                # If not enough players, end the game
+                active_players = sum(1 for p in room.players.values()
+                                    if p['connected'] and not p.get('is_host'))
+                if active_players < 2:  # Minimum 2 players for any game
+                    room.game_state = 'waiting'
+                    room.current_game = None
+                    await sio.emit('game_cancelled', {
+                        'reason': 'Not enough players'
+                    }, room=room.room_id)
+
+                # If it was this player's turn in drawing game, move to next player
+                if (room.game_state == 'playing' and
+                        room.current_game == 'chinese_whispers' and
+                        room.player_order[room.current_player_index] == sid):
+                    room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+                    next_player_id = room.player_order[room.current_player_index]
+
+                    # Skip disconnected players
+                    while not room.players[next_player_id]['connected']:
+                        room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+                        next_player_id = room.player_order[room.current_player_index]
+
+                    await sio.emit('next_player', {
+                        'player': room.players[next_player_id]['name'],
+                        'skipped_disconnected': True
+                    }, room=room.room_id)
 
 class GameRoom:
     def __init__(self, room_id):
