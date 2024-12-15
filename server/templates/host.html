@@ -79,7 +79,8 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div class="text-center">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
-                    <img id="qrCode" src="/static/qr_{{ room_id }}.png" alt="QR Code" class="mb-4">
+                    <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4">
+                    <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
                 </div>
 
                 <div>
@@ -349,7 +350,8 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div class="text-center">
                             <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
-                            <img id="qrCode" src="/static/qr_{{ room_id }}.png" alt="QR Code" class="mb-4">
+                            <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4">
+                            <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
                         </div>
 
                         <div>

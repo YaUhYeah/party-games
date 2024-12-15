@@ -57,6 +57,16 @@ def create_app() -> socketio.ASGIApp:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+    # Print static directory structure for debugging
+    print("\nStatic directory structure:")
+    for root, dirs, files in os.walk(STATIC_DIR):
+        level = root.replace(STATIC_DIR, '').count(os.sep)
+        indent = ' ' * 4 * level
+        print(f"{indent}{os.path.basename(root)}/")
+        subindent = ' ' * 4 * (level + 1)
+        for f in files:
+            print(f"{subindent}{f}")
+
     # Add static files to templates context
     templates.env.globals["static_url"] = "/static"
 

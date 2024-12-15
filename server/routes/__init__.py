@@ -125,6 +125,11 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
             qr_path = os.path.join(QR_DIR, qr_filename)
             qr_image.save(qr_path)
 
+            # Log paths for debugging
+            print(f"QR Code saved to: {qr_path}")
+            print(f"QR Code URL: /static/qr/{qr_filename}")
+            print(f"Join URL: {join_url}")
+
             return templates.TemplateResponse(
                 "host.html",
                 {
