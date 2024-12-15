@@ -257,12 +257,18 @@
 </head>
 <body>
     <!-- Debug Overlay -->
-    <div id="debugOverlay" class="fixed top-0 right-0 bg-black/80 text-white p-4 m-4 rounded-lg text-sm font-mono max-w-xs overflow-auto max-h-96 hidden">
+    <div id="debugOverlay" class="fixed top-0 right-0 bg-black/80 text-white p-4 m-4 rounded-lg text-sm font-mono max-w-xs overflow-auto max-h-96 hidden z-50">
         <div class="flex justify-between items-center mb-2">
             <h3 class="font-bold">Debug Info</h3>
-            <button onclick="toggleDebug()" class="text-gray-400 hover:text-white">[X]</button>
+            <button onclick="toggleDebug()" class="text-gray-400 hover:text-white px-2">[X]</button>
         </div>
-        <pre id="debugInfo" class="whitespace-pre-wrap"></pre>
+        <div class="text-xs mb-2">Press Ctrl+Shift+D to toggle</div>
+        <pre id="debugInfo" class="whitespace-pre-wrap text-xs leading-tight"></pre>
+    </div>
+
+    <!-- Connection Status Toast -->
+    <div id="connectionToast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-full text-sm hidden">
+        <span id="connectionToastText"></span>
     </div>
 
     <div class="container mx-auto">
@@ -271,6 +277,12 @@
             <div id="nameInput" class="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/90 to-purple-600/90 backdrop-blur-sm">
                 <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-11/12 md:w-96 transform transition-all">
                     <h2 class="text-3xl font-bold text-indigo-600 mb-6">Join Game</h2>
+                    <div id="connectionStatus" class="text-sm text-gray-600 mb-4">
+                        Connecting to server...
+                    </div>
+                    <div id="roomInfo" class="text-sm bg-gray-100 p-2 rounded mb-4">
+                        Room ID: <span class="font-mono">{{ room_id }}</span>
+                    </div>
                     <div class="space-y-4">
                         <div>
                             <label for="playerName" class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
@@ -425,13 +437,25 @@
 
     <script>
         // Debug functions
-        let debugVisible = false;
-        const debugState = {
+        window.debugVisible = false;
+        window.debugState = {
             roomId: null,
             socketConnected: false,
             lastError: null,
             joinAttempts: 0,
             events: []
+        };
+
+        // Make debug functions globally available
+        window.toggleDebug = function() {
+            const overlay = document.getElementById('debugOverlay');
+            window.debugVisible = !window.debugVisible;
+            if (overlay) {
+                overlay.classList.toggle('hidden', !window.debugVisible);
+                if (window.debugVisible) {
+                    updateDebugInfo();
+                }
+            }
         };
 
         function updateDebugInfo() {
@@ -467,6 +491,16 @@
         debugState.roomId = roomId;
         updateDebugInfo();
 
+        // Update connection status
+        function updateConnectionStatus(status, isError = false) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (statusEl) {
+                statusEl.textContent = status;
+                statusEl.className = `text-sm ${isError ? 'text-red-600' : 'text-gray-600'} mb-4`;
+            }
+            console.log('Connection status:', status);
+        }
+
         // Initialize socket with better error handling and debug logging
         const socket = io({
             path: '/socket.io/',
@@ -475,7 +509,7 @@
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
             timeout: 20000,
-            autoConnect: false,  // We'll connect manually after setup
+            autoConnect: true,  // Connect immediately
             query: {
                 room_id: roomId
             }
@@ -484,6 +518,7 @@
         // Socket connection events
         socket.on('connect', () => {
             console.log('Socket connected');
+            updateConnectionStatus('Connected to server');
             debugState.socketConnected = true;
             debugState.events.push({
                 time: new Date().toISOString(),
@@ -492,8 +527,21 @@
             updateDebugInfo();
         });
 
+        socket.on('connect_error', (error) => {
+            console.error('Socket connection error:', error);
+            updateConnectionStatus('Connection error: ' + error.message, true);
+            debugState.socketConnected = false;
+            debugState.lastError = {
+                time: new Date().toISOString(),
+                type: 'connect_error',
+                message: error.message
+            };
+            updateDebugInfo();
+        });
+
         socket.on('disconnect', () => {
             console.log('Socket disconnected');
+            updateConnectionStatus('Disconnected from server', true);
             debugState.socketConnected = false;
             debugState.events.push({
                 time: new Date().toISOString(),
@@ -501,6 +549,15 @@
             });
             updateDebugInfo();
         });
+
+        // Show debug overlay by default in development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            setTimeout(() => {
+                if (!debugVisible) {
+                    toggleDebug();
+                }
+            }, 1000);
+        }
 
         // Debug logging for all socket events
         socket.onAny((event, ...args) => {
@@ -734,7 +791,7 @@
         }
 
         // Game flow functions
-        async function joinGame() {
+        window.joinGame = async function() {
             console.log('Join button clicked');
             debugState.joinAttempts++;
             debugState.events.push({
