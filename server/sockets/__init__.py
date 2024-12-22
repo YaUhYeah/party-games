@@ -1,5 +1,7 @@
 """Socket events module."""
+import asyncio
 import base64
+import random
 from typing import Dict
 
 import socketio
@@ -243,6 +245,66 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             await sio.emit('game_error', {
                 'message': f'Failed to start game: {str(e)}'
             }, room=sid)
+
+    async def start_round(sio: socketio.AsyncServer, room: GameRoom):
+        """Start a new round."""
+        try:
+            room.round += 1
+            room.game_state = 'playing'
+            room.reset_round()
+            
+            if room.current_game == 'chinese_whispers':
+                # Get a new word and start with first player
+                room.current_word = room.get_next_word()
+                room.current_player_index = 0
+                first_player = room.player_order[0]
+                
+                # Notify all players of round start
+                await sio.emit('round_started', {
+                    'round': room.round,
+                    'total_rounds': room.total_rounds,
+                    'current_player': room.players[first_player]['name']
+                }, room=room.room_id)
+                
+                # Send word to first player
+                await sio.emit('your_turn', {
+                    'word': room.current_word,
+                    'round': room.round
+                }, room=first_player)
+                
+            elif room.current_game == 'chase':
+                # Get next chase question
+                if not room.chase_questions:
+                    room.chase_questions = [q for q in room.get_chase_questions()]
+                    random.shuffle(room.chase_questions)
+                
+                question = room.chase_questions.pop(0)
+                
+                # Send question to all players
+                await sio.emit('chase_question', {
+                    'question': question,
+                    'round': room.round,
+                    'total_rounds': room.total_rounds,
+                    'chase_position': room.chase_position
+                }, room=room.room_id)
+                
+            else:  # trivia
+                # Get next question
+                question = room.get_next_question()
+                
+                # Send question to all players
+                await sio.emit('trivia_question', {
+                    'question': question,
+                    'round': room.round,
+                    'total_rounds': room.total_rounds
+                }, room=room.room_id)
+            
+        except Exception as e:
+            print(f"Error starting round: {e}")
+            await sio.emit('game_error', {
+                'message': f'Failed to start round: {str(e)}'
+            }, room=room.room_id)
+            room.game_state = 'error'
 
     @sio.event
     async def player_ready(sid, data):

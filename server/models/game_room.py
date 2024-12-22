@@ -203,6 +203,31 @@ class GameRoom:
         question = random.choice(available_questions)
         self.used_questions.add(question)
         return question
+        
+    def get_chase_questions(self) -> List[Dict[str, Any]]:
+        """Get questions for chase game."""
+        # Filter questions by category if one is selected
+        available_questions = CHASE_QUESTIONS
+        if self.chase_category:
+            available_questions = [q for q in CHASE_QUESTIONS if q['category'] == self.chase_category]
+            
+        # Remove used questions
+        available_questions = [q for q in available_questions if q not in self.used_questions]
+        
+        # If no questions available, reset used questions
+        if not available_questions:
+            self.used_questions.clear()
+            available_questions = CHASE_QUESTIONS if not self.chase_category else \
+                [q for q in CHASE_QUESTIONS if q['category'] == self.chase_category]
+        
+        # Get a batch of questions
+        batch_size = min(10, len(available_questions))
+        questions = random.sample(available_questions, batch_size)
+        
+        # Mark questions as used
+        self.used_questions.update(questions)
+        
+        return questions
 
     def add_player(self, sid: str, name: str, profile_picture: str = None, is_host: bool = False) -> None:
         """Add a player with profile picture and initialize their stats."""
