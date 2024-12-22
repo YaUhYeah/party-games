@@ -782,33 +782,40 @@
 
             // Initialize socket connection
             initSocket() {
+                console.log('Initializing socket connection...');
                 // Basic socket initialization with reliable defaults
                 this.socket = io({
                     path: '/socket.io/',
-                    transports: ['polling', 'websocket'],
+                    transports: ['websocket', 'polling'],  // Try WebSocket first
                     reconnection: true,
                     reconnectionAttempts: Infinity,
                     reconnectionDelay: 1000,
                     reconnectionDelayMax: 5000,
                     timeout: 20000,
-                    autoConnect: true,
+                    autoConnect: false,  // We'll connect manually
                     query: { 
-                        room_id: this.roomId
-                    },
-                    // Performance optimizations
-                    perMessageDeflate: true,  // Enable WebSocket compression
-                    transportOptions: {
-                        polling: {
-                            extraHeaders: {
-                                'X-Client-Type': 'mobile'
-                            }
-                        }
-                    },
-                    // Batch small packets
-                    parser: {
-                        protocol: 4,
-                        binaryType: 'arraybuffer'
+                        room_id: this.roomId,
+                        client_type: 'player'
                     }
+                });
+
+                // Update connection status immediately
+                this.updateConnectionStatus('Connecting to server...');
+
+                // Connect manually
+                this.socket.connect();
+
+                // Add connection event handlers
+                this.socket.on('connect_error', (error) => {
+                    console.error('Connection error:', error);
+                    this.updateConnectionStatus('Connection error: ' + error.message, true);
+                    this.showNotification('Connection error. Please check your internet connection.', 'error');
+                });
+
+                this.socket.on('connect_timeout', () => {
+                    console.error('Connection timeout');
+                    this.updateConnectionStatus('Connection timeout. Please try again.', true);
+                    this.showNotification('Connection timeout. Please try again.', 'error');
                 });
                 
                 // Initialize touch gesture support
@@ -1224,11 +1231,15 @@
 
                     console.log('Emitting join_room event');
                     // Join room with profile
+                    console.log('Attempting to join room:', this.roomId);
+                    this.showNotification('Joining game...', 'info');
+                    
                     this.socket.emit('join_room', {
                         room_id: this.roomId,
                         player_name: playerName,
                         profile_picture: profileData,
-                        is_host: false
+                        is_host: false,
+                        client_id: this.socket.id
                     });
 
                     // Set up response timeout
