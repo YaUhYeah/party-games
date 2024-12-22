@@ -237,11 +237,16 @@
             initProfileDrawing() {
                 const canvas = document.getElementById('profileCanvas');
                 if (!canvas) return;
+
+                // Set canvas size explicitly
+                canvas.width = 128;
+                canvas.height = 128;
                 
                 this.profileState = {
                     canvas,
                     ctx: canvas.getContext('2d', {
-                        willReadFrequently: true
+                        willReadFrequently: true,
+                        alpha: true
                     }),
                     isDrawing: false,
                     currentColor: '#000000',
@@ -250,8 +255,25 @@
                     lastX: 0,
                     lastY: 0,
                     undoStack: [],
-                    redoStack: []
+                    redoStack: [],
+                    touchEnabled: 'ontouchstart' in window
                 };
+
+                // Initialize canvas with white background
+                this.profileState.ctx.fillStyle = '#FFFFFF';
+                this.profileState.ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Enable touch action
+                canvas.style.touchAction = 'none';
+                
+                // Add visual feedback for touch
+                canvas.addEventListener('touchstart', () => {
+                    canvas.style.transform = 'scale(0.98)';
+                }, { passive: true });
+                
+                canvas.addEventListener('touchend', () => {
+                    canvas.style.transform = 'scale(1)';
+                }, { passive: true });
                 
                 // Initialize canvas
                 this.profileState.ctx.fillStyle = '#FFFFFF';
@@ -266,26 +288,42 @@
                 canvas.addEventListener('mouseup', this.endProfileDrawing.bind(this));
                 canvas.addEventListener('mouseleave', this.endProfileDrawing.bind(this));
                 
-                // Touch events
+                // Enhanced touch events with scaling
                 canvas.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     const touch = e.touches[0];
                     const rect = canvas.getBoundingClientRect();
-                    const x = touch.clientX - rect.left;
-                    const y = touch.clientY - rect.top;
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    const x = (touch.clientX - rect.left) * scaleX;
+                    const y = (touch.clientY - rect.top) * scaleY;
+                    this.isDrawing = true;
                     this.startProfileDrawing({ offsetX: x, offsetY: y });
-                });
+                }, { passive: false });
                 
                 canvas.addEventListener('touchmove', (e) => {
                     e.preventDefault();
+                    if (!this.isDrawing) return;
                     const touch = e.touches[0];
                     const rect = canvas.getBoundingClientRect();
-                    const x = touch.clientX - rect.left;
-                    const y = touch.clientY - rect.top;
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    const x = (touch.clientX - rect.left) * scaleX;
+                    const y = (touch.clientY - rect.top) * scaleY;
                     this.drawProfile({ offsetX: x, offsetY: y });
-                });
+                }, { passive: false });
                 
-                canvas.addEventListener('touchend', this.endProfileDrawing.bind(this));
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.isDrawing = false;
+                    this.endProfileDrawing();
+                }, { passive: false });
+
+                canvas.addEventListener('touchcancel', (e) => {
+                    e.preventDefault();
+                    this.isDrawing = false;
+                    this.endProfileDrawing();
+                }, { passive: false });
                 
                 // Color picker
                 const colorButtons = document.querySelectorAll('.color-picker button');
@@ -317,24 +355,60 @@
             },
             
             startProfileDrawing(e) {
+                if (!this.profileState) return;
                 const { ctx } = this.profileState;
+                
+                // Get coordinates, handling both mouse and touch events
+                let x, y;
+                if (e.touches) {
+                    const rect = this.profileState.canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    x = (touch.clientX - rect.left) * (this.profileState.canvas.width / rect.width);
+                    y = (touch.clientY - rect.top) * (this.profileState.canvas.height / rect.height);
+                } else {
+                    x = e.offsetX;
+                    y = e.offsetY;
+                }
+                
                 this.profileState.isDrawing = true;
-                this.profileState.lastX = e.offsetX;
-                this.profileState.lastY = e.offsetY;
+                this.profileState.lastX = x;
+                this.profileState.lastY = y;
                 
                 // Start new path
                 ctx.beginPath();
-                ctx.moveTo(this.profileState.lastX, this.profileState.lastY);
+                ctx.moveTo(x, y);
+                
+                // Draw initial point for better touch response
+                ctx.arc(x, y, this.profileState.brushSize / 2, 0, Math.PI * 2);
+                ctx.fill();
                 
                 // Save state for undo
                 this.saveProfileState();
+                
+                // Provide haptic feedback if available
+                if (window.navigator.vibrate) {
+                    window.navigator.vibrate(50);
+                }
             },
             
             drawProfile(e) {
-                if (!this.profileState.isDrawing) return;
+                if (!this.profileState || !this.profileState.isDrawing) return;
                 
-                const { ctx, currentColor, currentTool, brushSize } = this.profileState;
+                const { ctx, currentColor, currentTool, brushSize, canvas } = this.profileState;
                 
+                // Get coordinates, handling both mouse and touch events
+                let x, y;
+                if (e.touches) {
+                    const rect = canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                    y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                } else {
+                    x = e.offsetX;
+                    y = e.offsetY;
+                }
+                
+                // Set drawing styles
                 ctx.lineWidth = brushSize;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -344,17 +418,23 @@
                     ctx.globalCompositeOperation = 'destination-out';
                 } else {
                     ctx.strokeStyle = currentColor;
+                    ctx.fillStyle = currentColor;
                     ctx.globalCompositeOperation = 'source-over';
                 }
                 
-                // Draw line
+                // Draw smooth line using quadratic curve
                 ctx.beginPath();
                 ctx.moveTo(this.profileState.lastX, this.profileState.lastY);
-                ctx.lineTo(e.offsetX, e.offsetY);
+                
+                // Calculate control point for smooth curve
+                const cx = (this.profileState.lastX + x) / 2;
+                const cy = (this.profileState.lastY + y) / 2;
+                ctx.quadraticCurveTo(cx, cy, x, y);
                 ctx.stroke();
                 
-                this.profileState.lastX = e.offsetX;
-                this.profileState.lastY = e.offsetY;
+                // Update last position
+                this.profileState.lastX = x;
+                this.profileState.lastY = y;
             },
             
             endProfileDrawing() {
@@ -853,6 +933,7 @@
 
             // Join game function
             async joinGame() {
+                console.log('Join game called');
                 const playerName = document.getElementById('playerName').value.trim();
                 console.log('Attempting to join with name:', playerName);
 
@@ -878,37 +959,84 @@
                 }
 
                 try {
-                    // Get profile picture data
-                    const profileData = this.profileState.canvas.toDataURL('image/png', 0.8);
-                    
-                    // Validate profile picture (ensure it's not empty)
-                    const hasDrawing = await this.validateProfilePicture(profileData);
-                    if (!hasDrawing) {
-                        // Generate default profile with first letter of name
-                        const defaultProfile = await this.generateDefaultProfile(playerName[0].toUpperCase());
-                        this.profileState.ctx.drawImage(defaultProfile, 0, 0);
+                    // Ensure socket is connected
+                    if (!this.socket.connected) {
+                        console.log('Socket not connected, attempting to connect...');
+                        await new Promise((resolve, reject) => {
+                            this.socket.connect();
+                            this.socket.once('connect', resolve);
+                            this.socket.once('connect_error', reject);
+                            // Timeout after 5 seconds
+                            setTimeout(() => reject(new Error('Connection timeout')), 5000);
+                        });
                     }
 
-                    // Save final profile
-                    this.saveProfileToLocalStorage();
+                    // Get profile picture data
+                    let profileData;
+                    if (this.profileState && this.profileState.canvas) {
+                        profileData = this.profileState.canvas.toDataURL('image/png', 0.8);
+                        
+                        // Validate profile picture (ensure it's not empty)
+                        const hasDrawing = await this.validateProfilePicture(profileData);
+                        if (!hasDrawing) {
+                            console.log('No drawing found, generating default profile');
+                            // Generate default profile with first letter of name
+                            const defaultProfile = await this.generateDefaultProfile(playerName[0].toUpperCase());
+                            this.profileState.ctx.drawImage(defaultProfile, 0, 0);
+                            profileData = this.profileState.canvas.toDataURL('image/png', 0.8);
+                        }
 
+                        // Save final profile
+                        this.saveProfileToLocalStorage();
+                    } else {
+                        console.warn('Profile state or canvas not initialized');
+                        // Generate a default profile
+                        const defaultProfile = await this.generateDefaultProfile(playerName[0].toUpperCase());
+                        profileData = defaultProfile.toDataURL('image/png', 0.8);
+                    }
+
+                    console.log('Emitting join_room event');
                     // Join room with profile
                     this.socket.emit('join_room', {
                         room_id: this.roomId,
                         player_name: playerName,
-                        profile_picture: this.profileState.canvas.toDataURL('image/png', 0.8),
+                        profile_picture: profileData,
                         is_host: false
                     });
+
+                    // Set up response timeout
+                    const joinTimeout = setTimeout(() => {
+                        console.error('Join room timeout');
+                        this.showNotification('Connection timeout. Please try again.', 'error');
+                        this.resetJoinButton(joinButton);
+                    }, 10000);
+
+                    // Wait for response
+                    await new Promise((resolve, reject) => {
+                        this.socket.once('join_confirmed', () => {
+                            clearTimeout(joinTimeout);
+                            resolve();
+                        });
+                        this.socket.once('join_error', (error) => {
+                            clearTimeout(joinTimeout);
+                            reject(new Error(error.message || 'Failed to join game'));
+                        });
+                    });
+
                 } catch (error) {
                     console.error('Error joining game:', error);
-                    this.showNotification('Failed to join game. Please try again.', 'error');
-                    
-                    if (joinButton) {
-                        joinButton.disabled = false;
-                        joinButton.querySelector('.join-text').textContent = 'Join Game';
-                        joinButton.querySelector('.loading-spinner').classList.add('hidden');
-                    }
+                    this.showNotification(error.message || 'Failed to join game. Please try again.', 'error');
+                    this.resetJoinButton(joinButton);
                 }
+            },
+
+            resetJoinButton(button) {
+                if (button) {
+                    button.disabled = false;
+                    button.querySelector('.join-text').textContent = 'Join Game';
+                    button.querySelector('.loading-spinner').classList.add('hidden');
+                }
+            },
             },
 
             // UI helper functions
