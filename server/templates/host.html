@@ -9,6 +9,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
     <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+    <!-- Amazon Fire TV Support -->
+    <script src="https://resources.amazonwebapps.com/v1/latest/Amazon-Web-App-API.min.js"></script>
+    <!-- DIAL Protocol Support for Fire TV -->
+    <script src="https://www.amazonwebapps.com/scripts/dial.js"></script>
     <!-- AirPlay support -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-tv-app-capable" content="yes">
@@ -120,6 +124,15 @@
                 <!-- Cast Button -->
                 <google-cast-launcher id="castButton" class="w-10 h-10"></google-cast-launcher>
                 
+                <!-- Fire TV Button -->
+                <button onclick="showFireTVDialog()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Cast to Fire TV">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1h-7v2h3a1 1 0 110 2H9a1 1 0 110-2h3v-2H4a1 1 0 01-1-1V5z" stroke-width="2"/>
+                    </svg>
+                </button>
+                
                 <!-- AirPlay Button -->
                 <button onclick="startAirPlay()" 
                         class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
@@ -128,6 +141,47 @@
                         <path d="M5 15l7-7 7 7M12 8v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </button>
+
+                <!-- Fire TV Connection Dialog -->
+                <div id="fireTVDialog" class="fixed inset-0 bg-black/50 hidden items-center justify-center">
+                    <div class="bg-white p-6 rounded-xl max-w-md w-11/12 space-y-4">
+                        <h3 class="text-xl font-bold">Cast to Fire TV</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 1: Screen Mirroring</h4>
+                                <ol class="text-sm space-y-2 text-gray-600">
+                                    <li>1. On your Fire TV, press and hold the <span class="font-medium">Home</span> button</li>
+                                    <li>2. Select <span class="font-medium">Mirroring</span></li>
+                                    <li>3. On your phone, enable screen mirroring and select your Fire TV</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 2: Fire TV Browser</h4>
+                                <ol class="text-sm space-y-2 text-gray-600">
+                                    <li>1. On your Fire TV, open <span class="font-medium">Firefox</span> or <span class="font-medium">Silk Browser</span></li>
+                                    <li>2. Enter this URL:</li>
+                                    <div class="bg-white p-2 rounded border text-sm font-mono break-all">
+                                        {{ local_url }}
+                                    </div>
+                                    <li>3. Enter room code: <span class="font-mono font-medium">{{ room_id }}</span></li>
+                                </ol>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 3: QR Code</h4>
+                                <p class="text-sm text-gray-600">Scan with Fire TV app on your phone:</p>
+                                <img src="{{ qr_code }}" alt="QR Code" class="w-32 h-32 mx-auto">
+                            </div>
+                        </div>
+                        
+                        <button onclick="document.getElementById('fireTVDialog').classList.add('hidden')"
+                                class="w-full bg-gray-100 py-2 rounded-lg hover:bg-gray-200 transition-all">
+                            Close
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Smart TV Button -->
                 <button onclick="showTVQRCode()" 
@@ -321,6 +375,27 @@
             }
         }
 
+        function showFireTVDialog() {
+            const dialog = document.getElementById('fireTVDialog');
+            dialog.classList.remove('hidden');
+            dialog.classList.add('flex');
+            
+            // Initialize Fire TV detection
+            if (window.amazon && window.amazon.WebApp) {
+                window.amazon.WebApp.whenReady(function() {
+                    if (window.amazon.WebApp.isFireTV) {
+                        // We're already on Fire TV
+                        dialog.querySelector('.bg-gray-50').innerHTML = `
+                            <div class="text-center py-4">
+                                <p class="text-green-600 font-medium">You're already on Fire TV!</p>
+                                <p class="text-sm text-gray-600 mt-2">You can close this dialog and start playing.</p>
+                            </div>
+                        `;
+                    }
+                });
+            }
+        }
+
         function showTVQRCode() {
             const modal = document.getElementById('tvModal');
             const qrCode = document.getElementById('tvQRCode');
@@ -337,6 +412,38 @@
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
+
+        // Initialize Fire TV support
+        function initFireTVSupport() {
+            if (window.amazon && window.amazon.WebApp) {
+                window.amazon.WebApp.whenReady(function() {
+                    if (window.amazon.WebApp.isFireTV) {
+                        // We're on Fire TV, optimize the UI
+                        document.body.classList.add('tv-mode');
+                        
+                        // Handle Fire TV remote
+                        window.addEventListener('keydown', function(e) {
+                            switch(e.keyCode) {
+                                case 37: // Left
+                                    navigateButtons('prev');
+                                    break;
+                                case 39: // Right
+                                    navigateButtons('next');
+                                    break;
+                                case 13: // Enter/Select
+                                    document.activeElement.click();
+                                    break;
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            initFireTVSupport();
+        });
 
         function generateTVCode() {
             return Math.random().toString(36).substring(2, 8).toUpperCase();
