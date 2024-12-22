@@ -14,6 +14,23 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
     async def connect(sid, environ):
         """Handle client connection."""
         print(f"Client connected: {sid}")
+        print(f"Connection details: {environ.get('QUERY_STRING', '')}")
+        
+        # Get room_id from query string if available
+        room_id = None
+        query = environ.get('QUERY_STRING', '')
+        if 'room_id=' in query:
+            room_id = query.split('room_id=')[1].split('&')[0]
+            print(f"Client attempting to connect to room: {room_id}")
+            
+            # Validate room exists
+            if room_id not in rooms:
+                print(f"Warning: Room {room_id} not found")
+                # We'll let the client connect but inform them about the room status
+                await sio.emit('room_status', {
+                    'exists': False,
+                    'message': 'Room not found or expired'
+                }, room=sid)
 
     @sio.event
     async def join_room(sid, data):
@@ -26,10 +43,13 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
             print(f"Join room request: {data}")
 
-            # Create room if it doesn't exist
+            # Validate room exists
             if room_id not in rooms:
-                print(f"Creating new room: {room_id}")
-                rooms[room_id] = GameRoom(room_id)
+                print(f"Error: Room {room_id} not found")
+                await sio.emit('join_error', {
+                    'message': 'Room not found or has expired. Please scan the QR code again.'
+                }, room=sid)
+                return
 
             room = rooms[room_id]
 

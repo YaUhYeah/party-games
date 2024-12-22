@@ -31,19 +31,22 @@ def create_app() -> socketio.ASGIApp:
         allow_headers=["*"],
     )
 
-    # Configure Socket.IO with enhanced settings
+    # Configure Socket.IO with enhanced settings for mobile support
     sio = socketio.AsyncServer(
         async_mode='asgi',
         cors_allowed_origins='*',
-        ping_timeout=35,
+        ping_timeout=60,  # Increased timeout for mobile networks
         ping_interval=25,
         max_http_buffer_size=1e8,  # 100MB max message size
         logger=True,
         engineio_logger=True,
         reconnection=True,
-        reconnection_attempts=5,
+        reconnection_attempts=10,  # More retry attempts
         reconnection_delay=1000,
-        reconnection_delay_max=5000
+        reconnection_delay_max=5000,
+        allow_upgrades=True,  # Allow WebSocket upgrades
+        http_compression=True,  # Enable compression
+        transports=['websocket', 'polling']  # Prefer WebSocket
     )
 
     # Set up static files and templates
