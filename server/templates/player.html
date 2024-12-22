@@ -203,7 +203,7 @@
                             </div>
                         </div>
 
-                        <button onclick="window.gameState.joinGame()" 
+                        <button id="joinButton" type="button"
                                 class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2">
                             <span class="join-text font-semibold">Join Game</span>
                             <span class="loading-spinner hidden">
@@ -226,7 +226,7 @@
 
     <script>
         // Initialize game state
-        window.gameState = {
+        const gameState = {
             socket: null,
             roomId: "{{ room_id }}",
             hasJoined: false,
@@ -241,10 +241,20 @@
             // Initialize the game
             init() {
                 console.log('Initializing game with room ID:', this.roomId);
+                
+                // Initialize core components
                 this.initSocket();
                 this.initProfileDrawing();
                 this.addKeyboardListeners();
                 this.updateDebugInfo();
+                
+                // Set up join button
+                const joinButton = document.getElementById('joinButton');
+                if (joinButton) {
+                    joinButton.addEventListener('click', () => this.joinGame());
+                } else {
+                    console.error('Join button not found');
+                }
                 
                 // Load saved profile if exists
                 this.loadSavedProfile();
@@ -703,7 +713,7 @@
             },
 
             resetJoinButton() {
-                const joinButton = document.querySelector('button[onclick="window.gameState.joinGame()"]');
+                const joinButton = document.getElementById('joinButton');
                 if (joinButton) {
                     joinButton.disabled = false;
                     joinButton.querySelector('.join-text').textContent = 'Join Game';
@@ -1284,8 +1294,6 @@
                 }
             },
 
-            },
-
             // UI helper functions
             updateConnectionStatus(status, isError = false) {
                 const statusEl = document.getElementById('connectionStatus');
@@ -1313,7 +1321,7 @@
             },
 
             resetJoinButton() {
-                const joinButton = document.querySelector('button[onclick="window.gameState.joinGame()"]');
+                const joinButton = document.getElementById('joinButton');
                 if (joinButton) {
                     joinButton.disabled = false;
                     joinButton.querySelector('.join-text').textContent = 'Join Game';
@@ -1383,9 +1391,18 @@
             }
         };
 
-        // Initialize the game when the page loads
-        window.addEventListener('load', () => {
-            window.gameState.init();
+        // Attach gameState to window
+        window.gameState = gameState;
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing game...');
+            try {
+                window.gameState.init();
+                console.log('Game initialized successfully');
+            } catch (error) {
+                console.error('Error initializing game:', error);
+            }
         });
     </script>
 </body>
