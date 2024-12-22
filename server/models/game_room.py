@@ -14,20 +14,29 @@ class GameError(Exception):
 
 class GameRoom:
     def __init__(self, room_id: str):
-        # Basic room attributes
+        # Basic room attributes with enhanced security and profiles
         self.room_id = room_id
-        self.players: Dict[str, Dict[str, Any]] = {}  # {sid: {'name': str, 'user_id': int, 'profile': str, 'is_host': bool}}
+        self.players: Dict[str, Dict[str, Any]] = {}  # {sid: {'name': str, 'user_id': int, 'profile_picture': str, 'is_host': bool, 'last_action': datetime, 'stats': Dict}}
         self.host_sid: Optional[str] = None
         self.game_state = 'waiting'
         self.current_game: Optional[str] = None
+        self.state_history: List[Dict[str, Any]] = []  # For state recovery
+        self.last_state_update = datetime.now()
         
-        # Game progress tracking
+        # Player profiles and stats
+        self.player_stats: Dict[str, Dict[str, Any]] = {}  # Persistent player statistics
+        self.profile_cache: Dict[str, str] = {}  # Cache for profile pictures
+        self.achievements: Dict[str, List[str]] = {}  # Player achievements
+        
+        # Enhanced game progress tracking
         self.round = 0
         self.total_rounds = GAME_CONFIG['rounds_per_game']
-        self.difficulty_level = 'easy'  # Starts with easy, progresses to medium and hard
+        self.difficulty_level = 'easy'  # Dynamic difficulty adjustment
         self.current_word: Optional[str] = None
         self.current_question = None
         self.topic: Optional[str] = None
+        self.round_start_time: Optional[datetime] = None
+        self.state_lock = False  # Prevent race conditions
         
         # Player management
         self.player_order: List[str] = []
@@ -47,10 +56,31 @@ class GameRoom:
         self.last_activity_time = datetime.now()
         self.afk_warnings: Dict[str, bool] = {}  # Track AFK warnings per player
         
-        # Content management
+        # Enhanced content management
         self.used_words = set()
         self.used_questions = set()
         self.drawings: List[Dict[str, Any]] = []
+        self.drawing_state = {
+            'current_chain': [],  # Track drawing progression
+            'hints_used': set(),  # Track used hints
+            'time_extensions': 2,  # Number of time extensions available
+            'tools': {
+                'brush_sizes': [2, 5, 10, 20],
+                'colors': ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
+                'special_tools': {
+                    'eraser': True,
+                    'fill': True,
+                    'undo': True,
+                    'shapes': ['circle', 'rectangle', 'line']
+                }
+            },
+            'canvas_history': [],  # For undo/redo
+            'reactions': {  # Player reactions to drawings
+                'likes': {},
+                'laughs': {},
+                'wows': {}
+            }
+        }
         
         # Performance optimization
         self.cache = {
@@ -63,13 +93,28 @@ class GameRoom:
         # Database connection
         self.db = next(get_db())
         
-        # Chase game specific attributes
+        # Enhanced chase game attributes
         self.chaser: Optional[str] = None
         self.chase_category: Optional[str] = None
         self.chase_position = 0
         self.chase_questions: List[Dict[str, Any]] = []
         self.chase_contestant: Optional[str] = None
         self.chase_scores: Dict[str, int] = {}
+        self.chase_state = {
+            'board_size': GAME_CONFIG['chase_board_size'],
+            'chaser_position': 0,
+            'contestant_position': 0,
+            'safe_positions': [],  # Positions where contestants are safe
+            'current_prize': 0,
+            'offer_high': 0,  # Higher offer with less steps to safety
+            'offer_low': 0,   # Lower offer with more steps to safety
+            'time_pressure': False,  # Activates when chaser is close
+            'power_ups': {  # Special abilities for contestants
+                'double_steps': 1,  # Move two steps on correct answer
+                'shield': 1,     # Block one chaser advance
+                'time_freeze': 1 # Extra time for one question
+            }
+        }
         
         # Music state
         self.current_music: Optional[str] = 'lobby'
@@ -156,15 +201,170 @@ class GameRoom:
         self.used_questions.add(question)
         return question
 
+    def add_player(self, sid: str, name: str, profile_picture: str = None, is_host: bool = False) -> None:
+        """Add a player with profile picture and initialize their stats."""
+        # Initialize player stats
+        initial_stats = {
+            'games_played': 0,
+            'wins': 0,
+            'perfect_rounds': 0,
+            'total_score': 0,
+            'best_streak': 0,
+            'favorite_game': None,
+            'achievements': [],
+            'last_played': datetime.now()
+        }
+
+        # Process profile picture
+        if profile_picture:
+            # Cache the profile picture
+            self.profile_cache[sid] = profile_picture
+        else:
+            # Generate default profile picture if none provided
+            self.profile_cache[sid] = self._generate_default_profile(name[0].upper())
+
+        # Add player to room
+        self.players[sid] = {
+            'name': name,
+            'profile_picture': self.profile_cache[sid],
+            'is_host': is_host,
+            'last_action': datetime.now(),
+            'stats': initial_stats.copy()
+        }
+
+        # Load persistent stats if available
+        if sid in self.player_stats:
+            self.players[sid]['stats'].update(self.player_stats[sid])
+
+    def update_player_stats(self, sid: str, game_result: Dict[str, Any]) -> None:
+        """Update player statistics after a game."""
+        if sid not in self.players:
+            return
+
+        stats = self.players[sid]['stats']
+        stats['games_played'] += 1
+        stats['total_score'] += game_result.get('score', 0)
+        
+        if game_result.get('is_winner'):
+            stats['wins'] += 1
+        
+        if game_result.get('perfect_round'):
+            stats['perfect_rounds'] += 1
+        
+        current_streak = game_result.get('streak', 0)
+        if current_streak > stats['best_streak']:
+            stats['best_streak'] = current_streak
+        
+        # Update favorite game
+        game_type = self.current_game
+        if game_type:
+            if 'game_counts' not in stats:
+                stats['game_counts'] = {}
+            stats['game_counts'][game_type] = stats['game_counts'].get(game_type, 0) + 1
+            
+            # Update favorite game based on most played
+            stats['favorite_game'] = max(stats['game_counts'].items(), key=lambda x: x[1])[0]
+        
+        stats['last_played'] = datetime.now()
+        
+        # Save to persistent storage
+        self.player_stats[sid] = stats.copy()
+
+    def get_player_profile(self, sid: str) -> Dict[str, Any]:
+        """Get player profile with stats and achievements."""
+        if sid not in self.players:
+            return None
+
+        player = self.players[sid]
+        return {
+            'name': player['name'],
+            'profile_picture': player['profile_picture'],
+            'stats': player['stats'],
+            'achievements': self.achievements.get(sid, []),
+            'rank': self._calculate_player_rank(sid)
+        }
+
+    def _calculate_player_rank(self, sid: str) -> str:
+        """Calculate player rank based on performance."""
+        if sid not in self.players:
+            return 'Novice'
+
+        stats = self.players[sid]['stats']
+        score = (
+            stats['wins'] * 100 +
+            stats['perfect_rounds'] * 50 +
+            stats['best_streak'] * 10 +
+            stats['total_score'] // 1000
+        )
+
+        if score >= 1000:
+            return 'Legend'
+        elif score >= 500:
+            return 'Master'
+        elif score >= 250:
+            return 'Expert'
+        elif score >= 100:
+            return 'Veteran'
+        else:
+            return 'Novice'
+
+    def _generate_default_profile(self, letter: str) -> str:
+        """Generate a default profile picture with the first letter."""
+        import io
+        from PIL import Image, ImageDraw, ImageFont
+        import base64
+
+        # Create a new image with a random background color
+        img = Image.new('RGB', (128, 128), self._get_random_color())
+        draw = ImageDraw.Draw(img)
+
+        # Load a font (using default font as fallback)
+        try:
+            font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 64)
+        except:
+            font = ImageFont.load_default()
+
+        # Calculate text position
+        text_width = draw.textlength(letter, font=font)
+        text_height = 64  # Approximate height
+        x = (128 - text_width) // 2
+        y = (128 - text_height) // 2
+
+        # Draw the letter
+        draw.text((x, y), letter, fill='white', font=font)
+
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
+    def _get_random_color(self) -> tuple:
+        """Generate a random pastel color."""
+        import random
+        return (
+            random.randint(100, 200),
+            random.randint(100, 200),
+            random.randint(100, 200)
+        )
+
     def calculate_score(self, player_id: str, is_correct: bool, answer_time: Optional[float] = None) -> Dict[str, Any]:
-        """Calculate score with enhanced mechanics and bonuses."""
+        """Calculate score with enhanced mechanics, bonuses, and achievements."""
         result = {
             'base_score': 0,
             'streak_bonus': 0,
             'time_bonus': 0,
             'comeback_bonus': 0,
+            'difficulty_bonus': 0,
             'participation_bonus': GAME_CONFIG['points']['participation_bonus'],
-            'total_score': 0
+            'total_score': 0,
+            'achievements': []
+        }
+        
+        # Apply difficulty multiplier
+        difficulty_multipliers = {
+            'easy': 1.0,
+            'medium': 1.5,
+            'hard': 2.0
         }
         
         # Update activity timestamp
