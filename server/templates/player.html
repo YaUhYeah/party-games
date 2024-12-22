@@ -217,9 +217,79 @@
                 </div>
             </div>
 
+            <!-- Waiting Lobby -->
+            <div id="waitingLobby" class="hidden fixed inset-0 bg-gradient-to-br from-indigo-500/90 to-purple-600/90 backdrop-blur-sm">
+                <div class="container mx-auto px-4 py-8 h-full flex flex-col">
+                    <div class="bg-white rounded-2xl shadow-2xl p-6 flex-grow flex flex-col max-w-2xl mx-auto">
+                        <!-- Room Info -->
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 class="text-2xl font-bold text-indigo-600">Waiting Room</h2>
+                                <p class="text-gray-500">Room Code: <span class="font-mono bg-gray-100 px-2 py-1 rounded">{{ room_id }}</span></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-gray-500">Players: <span id="playerCount">0</span></p>
+                                <p class="text-xs text-gray-400" id="waitingStatus">Waiting for players...</p>
+                            </div>
+                        </div>
+
+                        <!-- Player List -->
+                        <div class="flex-grow overflow-auto mb-6">
+                            <div id="playerList" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                <!-- Players will be added here dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Game Selection (Host Only) -->
+                        <div id="hostControls" class="hidden">
+                            <div class="border-t border-gray-200 pt-4 mb-4">
+                                <h3 class="text-lg font-semibold mb-3">Select Game Mode</h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button class="game-select-btn p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-500 focus:border-indigo-500 transition-all text-left relative group"
+                                            data-game="chinese_whispers">
+                                        <div class="font-semibold mb-1">Chinese Whispers</div>
+                                        <p class="text-sm text-gray-500">Draw and guess pictures in sequence</p>
+                                        <div class="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/5 rounded-xl transition-all"></div>
+                                    </button>
+                                    <button class="game-select-btn p-4 rounded-xl border-2 border-gray-200 hover:border-indigo-500 focus:border-indigo-500 transition-all text-left relative group"
+                                            data-game="chase">
+                                        <div class="font-semibold mb-1">The Chase</div>
+                                        <p class="text-sm text-gray-500">Answer questions to escape the chaser</p>
+                                        <div class="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/5 rounded-xl transition-all"></div>
+                                    </button>
+                                </div>
+                            </div>
+                            <button id="startGameBtn" 
+                                    class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                    disabled>
+                                Start Game
+                            </button>
+                        </div>
+
+                        <!-- Player Ready Status -->
+                        <div id="playerControls" class="hidden">
+                            <div class="border-t border-gray-200 pt-4">
+                                <button id="readyBtn"
+                                        class="w-full bg-green-500 text-white p-4 rounded-xl hover:bg-green-600 active:bg-green-700 transition-all transform hover:scale-[1.02]">
+                                    Ready to Play!
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Game Area -->
             <div id="gameArea" class="hidden">
                 <!-- Game content will be dynamically added here -->
+            </div>
+
+            <!-- Game Starting Overlay -->
+            <div id="gameStarting" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+                <div class="text-center text-white">
+                    <h2 class="text-4xl font-bold mb-4">Game Starting</h2>
+                    <div class="text-2xl" id="gameStartCountdown">3</div>
+                </div>
             </div>
         </div>
     </div>
@@ -247,6 +317,7 @@
                 this.initProfileDrawing();
                 this.addKeyboardListeners();
                 this.updateDebugInfo();
+                this.initWaitingLobby();
                 
                 // Set up join button
                 const joinButton = document.getElementById('joinButton');
@@ -258,6 +329,86 @@
                 
                 // Load saved profile if exists
                 this.loadSavedProfile();
+            },
+            
+            initWaitingLobby() {
+                // Initialize game selection
+                const gameButtons = document.querySelectorAll('.game-select-btn');
+                gameButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        gameButtons.forEach(b => b.classList.remove('border-indigo-500'));
+                        btn.classList.add('border-indigo-500');
+                        this.selectedGame = btn.dataset.game;
+                        this.updateStartButton();
+                    });
+                });
+                
+                // Initialize start game button
+                const startGameBtn = document.getElementById('startGameBtn');
+                startGameBtn.addEventListener('click', () => {
+                    if (this.selectedGame) {
+                        this.socket.emit('start_game', {
+                            room_id: this.roomId,
+                            game_type: this.selectedGame
+                        });
+                    }
+                });
+                
+                // Initialize ready button
+                const readyBtn = document.getElementById('readyBtn');
+                readyBtn.addEventListener('click', () => {
+                    this.isReady = !this.isReady;
+                    readyBtn.classList.toggle('bg-green-500');
+                    readyBtn.classList.toggle('bg-gray-500');
+                    readyBtn.textContent = this.isReady ? 'Ready!' : 'Ready to Play!';
+                    this.socket.emit('player_ready', {
+                        room_id: this.roomId,
+                        ready: this.isReady
+                    });
+                });
+            },
+            
+            updateStartButton() {
+                const startGameBtn = document.getElementById('startGameBtn');
+                const playerCount = document.querySelectorAll('#playerList .player-card').length;
+                startGameBtn.disabled = !this.selectedGame || playerCount < 2;
+            },
+            
+            updatePlayerList(players) {
+                const playerList = document.getElementById('playerList');
+                const playerCount = document.getElementById('playerCount');
+                const waitingStatus = document.getElementById('waitingStatus');
+                
+                // Update player count
+                playerCount.textContent = players.length;
+                
+                // Update waiting status
+                if (players.length < 2) {
+                    waitingStatus.textContent = 'Waiting for more players...';
+                } else {
+                    waitingStatus.textContent = 'Ready to start!';
+                }
+                
+                // Clear and rebuild player list
+                playerList.innerHTML = '';
+                players.forEach(player => {
+                    const card = document.createElement('div');
+                    card.className = 'player-card bg-gray-50 rounded-xl p-4 flex items-center space-x-3';
+                    card.innerHTML = `
+                        <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                            <img src="${player.profile || ''}" alt="" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-grow">
+                            <div class="font-medium">${player.name}</div>
+                            <div class="text-sm text-gray-500">${player.ready ? 'Ready' : 'Not ready'}</div>
+                        </div>
+                        ${player.ready ? '<div class="w-3 h-3 rounded-full bg-green-500"></div>' : ''}
+                    `;
+                    playerList.appendChild(card);
+                });
+                
+                // Update start button state
+                this.updateStartButton();
             },
             
             showStatus(message, type = 'info') {
@@ -861,6 +1012,73 @@
                     if (state.gameArea) {
                         document.getElementById('gameArea').innerHTML = state.gameArea;
                     }
+                });
+
+                // Game-specific event handlers
+                this.socket.on('join_confirmed', (data) => {
+                    console.log('Join confirmed:', data);
+                    this.hasJoined = true;
+                    
+                    // Hide name input and show waiting lobby
+                    document.getElementById('nameInput').classList.add('hidden');
+                    document.getElementById('waitingLobby').classList.remove('hidden');
+                    
+                    // Show appropriate controls
+                    if (data.is_host) {
+                        document.getElementById('hostControls').classList.remove('hidden');
+                    } else {
+                        document.getElementById('playerControls').classList.remove('hidden');
+                    }
+                    
+                    // Update player list
+                    this.updatePlayerList(data.current_players);
+                });
+                
+                this.socket.on('player_joined', (data) => {
+                    console.log('Player joined:', data);
+                    this.updatePlayerList(data.players);
+                    this.showNotification(`${data.new_player} joined the game`, 'info');
+                });
+                
+                this.socket.on('player_left', (data) => {
+                    console.log('Player left:', data);
+                    this.updatePlayerList(data.players);
+                    this.showNotification(`${data.disconnected_player} left the game`, 'info');
+                });
+                
+                this.socket.on('player_ready', (data) => {
+                    console.log('Player ready status:', data);
+                    this.updatePlayerList(data.players);
+                });
+                
+                this.socket.on('game_error', (data) => {
+                    console.error('Game error:', data);
+                    this.showNotification(data.message, 'error');
+                });
+                
+                this.socket.on('game_starting', (data) => {
+                    console.log('Game starting:', data);
+                    
+                    // Show countdown overlay
+                    const gameStarting = document.getElementById('gameStarting');
+                    const countdown = document.getElementById('gameStartCountdown');
+                    gameStarting.classList.remove('hidden');
+                    
+                    // Start countdown
+                    let count = 3;
+                    countdown.textContent = count;
+                    
+                    const timer = setInterval(() => {
+                        count--;
+                        countdown.textContent = count;
+                        
+                        if (count <= 0) {
+                            clearInterval(timer);
+                            gameStarting.classList.add('hidden');
+                            document.getElementById('waitingLobby').classList.add('hidden');
+                            document.getElementById('gameArea').classList.remove('hidden');
+                        }
+                    }, 1000);
                 });
 
                 this.setupSocketListeners();

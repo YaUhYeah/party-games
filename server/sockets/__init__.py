@@ -182,6 +182,118 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             }, room=sid)
 
     @sio.event
+    async def start_game(sid, data):
+        """Handle game start request."""
+        try:
+            room_id = data['room_id']
+            game_type = data['game_type']
+            
+            if room_id not in rooms:
+                await sio.emit('game_error', {
+                    'message': 'Room not found'
+                }, room=sid)
+                return
+                
+            room = rooms[room_id]
+            
+            # Verify sender is host
+            if sid != room.host_sid:
+                await sio.emit('game_error', {
+                    'message': 'Only the host can start the game'
+                }, room=sid)
+                return
+                
+            # Check minimum players
+            active_players = sum(1 for p in room.players.values() 
+                               if p['connected'] and not p.get('is_host'))
+            if active_players < 2:
+                await sio.emit('game_error', {
+                    'message': 'Need at least 2 players to start'
+                }, room=sid)
+                return
+                
+            # Initialize game
+            room.current_game = game_type
+            room.game_state = 'starting'
+            room.round = 0
+            room.scores = {sid: 0 for sid in room.players if not room.players[sid].get('is_host')}
+            
+            # Set up player order for turn-based games
+            if game_type == 'chinese_whispers':
+                room.player_order = [sid for sid in room.players 
+                                   if room.players[sid]['connected'] and not room.players[sid].get('is_host')]
+                random.shuffle(room.player_order)
+                room.current_player_index = 0
+            
+            # Notify all players
+            await sio.emit('game_starting', {
+                'game_type': game_type,
+                'players': [{
+                    'name': room.players[sid]['name'],
+                    'score': 0
+                } for sid in room.players if room.players[sid]['connected'] and not room.players[sid].get('is_host')]
+            }, room=room_id)
+            
+            # Start first round after short delay
+            await asyncio.sleep(3)
+            await start_round(sio, room)
+            
+        except Exception as e:
+            print(f"Error starting game: {e}")
+            await sio.emit('game_error', {
+                'message': f'Failed to start game: {str(e)}'
+            }, room=sid)
+
+    @sio.event
+    async def player_ready(sid, data):
+        """Handle player ready status."""
+        try:
+            room_id = data['room_id']
+            ready = data.get('ready', True)
+            
+            if room_id not in rooms:
+                await sio.emit('game_error', {
+                    'message': 'Room not found'
+                }, room=sid)
+                return
+                
+            room = rooms[room_id]
+            
+            # Update player ready status
+            if ready:
+                room.ready_players.add(sid)
+            else:
+                room.ready_players.discard(sid)
+            
+            # Get updated player list with ready status
+            player_list = []
+            for player_sid, player_data in room.players.items():
+                if player_data['connected'] and not player_data.get('is_host'):
+                    player_list.append({
+                        'name': player_data['name'],
+                        'score': player_data.get('score', 0),
+                        'ready': player_sid in room.ready_players,
+                        'profile': player_data.get('profile', '')
+                    })
+            
+            # Notify all players of the update
+            await sio.emit('player_ready', {
+                'players': player_list
+            }, room=room_id)
+            
+            # Check if all players are ready
+            active_players = sum(1 for p in room.players.values() 
+                               if p['connected'] and not p.get('is_host'))
+            if len(room.ready_players) == active_players and active_players >= 2:
+                await sio.emit('all_players_ready', {}, room=room_id)
+            
+        except Exception as e:
+            print(f"Error handling player ready: {e}")
+            await sio.emit('game_error', {
+                'message': f'Failed to update ready status: {str(e)}'
+            }, room=sid)
+
+    @sio.event
     async def disconnect(sid):
         """Handle client disconnection."""
         print(f"Client disconnected: {sid}")

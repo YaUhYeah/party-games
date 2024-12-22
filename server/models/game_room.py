@@ -28,6 +28,9 @@ class GameRoom:
         self.profile_cache: Dict[str, str] = {}  # Cache for profile pictures
         self.achievements: Dict[str, List[str]] = {}  # Player achievements
         
+        # Player ready states
+        self.ready_players: set = set()  # Set of player SIDs who are ready
+        
         # Enhanced game progress tracking
         self.round = 0
         self.total_rounds = GAME_CONFIG['rounds_per_game']
