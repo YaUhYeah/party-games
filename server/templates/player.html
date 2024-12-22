@@ -235,29 +235,91 @@
             },
             
             initProfileDrawing() {
+                console.log('Initializing profile drawing');
                 const canvas = document.getElementById('profileCanvas');
-                if (!canvas) return;
+                if (!canvas) {
+                    console.error('Canvas element not found');
+                    return;
+                }
 
                 // Set canvas size explicitly
                 canvas.width = 128;
                 canvas.height = 128;
                 
-                this.profileState = {
+                // Initialize drawing state
+                this.isDrawing = false;
+                this.currentColor = '#000000';
+                this.currentTool = 'brush';
+                this.brushSize = 4;
+                this.lastX = 0;
+                this.lastY = 0;
+                
+                // Get context
+                const ctx = canvas.getContext('2d');
+                
+                // Set initial canvas state
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // Store in state
+                this.drawingState = {
                     canvas,
-                    ctx: canvas.getContext('2d', {
-                        willReadFrequently: true,
-                        alpha: true
-                    }),
-                    isDrawing: false,
-                    currentColor: '#000000',
-                    currentTool: 'brush',
-                    brushSize: 4,
-                    lastX: 0,
-                    lastY: 0,
+                    ctx,
                     undoStack: [],
-                    redoStack: [],
-                    touchEnabled: 'ontouchstart' in window
+                    redoStack: []
                 };
+
+                // Add mouse events
+                canvas.addEventListener('mousedown', this.handleDrawStart.bind(this));
+                canvas.addEventListener('mousemove', this.handleDrawMove.bind(this));
+                canvas.addEventListener('mouseup', this.handleDrawEnd.bind(this));
+                canvas.addEventListener('mouseleave', this.handleDrawEnd.bind(this));
+
+                // Add touch events
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    this.handleDrawStart({ offsetX: x, offsetY: y });
+                });
+
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    this.handleDrawMove({ offsetX: x, offsetY: y });
+                });
+
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.handleDrawEnd();
+                });
+
+                // Initialize color buttons
+                document.querySelectorAll('.color-picker button').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.currentColor = btn.dataset.color;
+                        this.updateToolStyles();
+                    });
+                });
+
+                // Initialize tool buttons
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    if (btn.dataset.tool) {
+                        btn.addEventListener('click', () => {
+                            this.currentTool = btn.dataset.tool;
+                            this.updateToolStyles();
+                        });
+                    }
+                });
+
+                console.log('Drawing initialization complete');
 
                 // Initialize canvas with white background
                 this.profileState.ctx.fillStyle = '#FFFFFF';
@@ -489,13 +551,99 @@
             updateToolStyles() {
                 const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
                 toolButtons.forEach(btn => {
-                    btn.classList.toggle('bg-indigo-100', btn.dataset.tool === this.profileState.currentTool);
+                    btn.classList.toggle('bg-indigo-100', btn.dataset.tool === this.currentTool);
                 });
                 
                 const colorButtons = document.querySelectorAll('.color-picker button');
                 colorButtons.forEach(btn => {
-                    btn.classList.toggle('ring-2', btn.dataset.color === this.profileState.currentColor);
+                    btn.classList.toggle('ring-2', btn.dataset.color === this.currentColor);
                 });
+            },
+
+            handleDrawStart(e) {
+                console.log('Draw start', e);
+                if (!this.drawingState) return;
+                
+                const { ctx, canvas } = this.drawingState;
+                const rect = canvas.getBoundingClientRect();
+                
+                // Get coordinates
+                const x = (e.offsetX / rect.width) * canvas.width;
+                const y = (e.offsetY / rect.height) * canvas.height;
+                
+                this.isDrawing = true;
+                this.lastX = x;
+                this.lastY = y;
+                
+                // Configure drawing style
+                ctx.strokeStyle = this.currentColor;
+                ctx.lineWidth = this.brushSize;
+                
+                if (this.currentTool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                
+                // Start path
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                
+                // Draw initial point
+                ctx.arc(x, y, this.brushSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Save state for undo
+                this.saveDrawingState();
+                
+                // Haptic feedback
+                if (window.navigator.vibrate) {
+                    window.navigator.vibrate(50);
+                }
+            },
+            
+            handleDrawMove(e) {
+                if (!this.isDrawing || !this.drawingState) return;
+                
+                const { ctx, canvas } = this.drawingState;
+                const rect = canvas.getBoundingClientRect();
+                
+                // Get coordinates
+                const x = (e.offsetX / rect.width) * canvas.width;
+                const y = (e.offsetY / rect.height) * canvas.height;
+                
+                // Draw line
+                ctx.beginPath();
+                ctx.moveTo(this.lastX, this.lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                
+                // Update position
+                this.lastX = x;
+                this.lastY = y;
+            },
+            
+            handleDrawEnd() {
+                if (!this.drawingState) return;
+                
+                this.isDrawing = false;
+                this.saveDrawingState();
+            },
+            
+            saveDrawingState() {
+                if (!this.drawingState) return;
+                
+                const { canvas } = this.drawingState;
+                const imageData = canvas.toDataURL('image/png');
+                this.drawingState.undoStack.push(imageData);
+                
+                // Limit stack size
+                if (this.drawingState.undoStack.length > 10) {
+                    this.drawingState.undoStack.shift();
+                }
+                
+                // Clear redo stack
+                this.drawingState.redoStack = [];
             },
 
             async validateProfilePicture(profileData) {
@@ -569,20 +717,18 @@
 
             // Initialize socket connection
             initSocket() {
-                // Enhanced socket initialization with compression and optimizations
+                // Basic socket initialization with reliable defaults
                 this.socket = io({
                     path: '/socket.io/',
-                    transports: ['websocket', 'polling'],
-                    reconnectionAttempts: 20,
+                    transports: ['polling', 'websocket'],
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
                     reconnectionDelay: 1000,
-                    reconnectionDelayMax: 10000,
+                    reconnectionDelayMax: 5000,
                     timeout: 20000,
-                    autoConnect: false,
+                    autoConnect: true,
                     query: { 
-                        room_id: this.roomId,
-                        client_id: this.generateClientId(),
-                        version: '1.0.0',
-                        platform: this.detectPlatform()
+                        room_id: this.roomId
                     },
                     // Performance optimizations
                     perMessageDeflate: true,  // Enable WebSocket compression
