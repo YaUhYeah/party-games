@@ -93,8 +93,24 @@
 
                 <div>
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
-                    <div id="playerList" class="player-list p-4 min-h-[200px]">
-                        <p class="text-gray-500">Waiting for players to join...</p>
+                    <div id="playerList" class="player-list p-4 min-h-[200px] space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
+                            <div class="text-sm text-gray-500" id="minPlayersStatus">
+                                Need 2+ players to start
+                            </div>
+                        </div>
+                        <div id="playerGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <!-- Players will be added here dynamically -->
+                        </div>
+                        <div id="emptyState" class="text-center py-8">
+                            <div class="text-gray-400">
+                                <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                <p>Waiting for players to join...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -438,14 +454,115 @@
         });
 
         socket.on('player_joined', (data) => {
+            console.log('Player joined:', data);
             updatePlayerList(data.players);
             playSound('player_join');
+            showToast(`${data.player_name} joined the game!`, 'success');
+            updateGameControls(data.players.length);
         });
 
         socket.on('player_left', (data) => {
+            console.log('Player left:', data);
             updatePlayerList(data.players);
             playSound('player_leave');
+            showToast(`${data.disconnected_player} left the game`, 'warning');
+            updateGameControls(data.players.length);
         });
+
+        function updatePlayerList(players) {
+            const playerGrid = document.getElementById('playerGrid');
+            const emptyState = document.getElementById('emptyState');
+            const playerCount = document.getElementById('playerCount');
+            const minPlayersStatus = document.getElementById('minPlayersStatus');
+            
+            // Update player count
+            playerCount.textContent = players.length;
+            
+            // Update min players status
+            if (players.length < 2) {
+                minPlayersStatus.textContent = 'Need 2+ players to start';
+                minPlayersStatus.className = 'text-sm text-red-500';
+            } else {
+                minPlayersStatus.textContent = 'Ready to start!';
+                minPlayersStatus.className = 'text-sm text-green-500';
+            }
+            
+            // Show/hide empty state
+            emptyState.style.display = players.length === 0 ? 'block' : 'none';
+            
+            // Clear and rebuild player grid
+            playerGrid.innerHTML = '';
+            players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-3 player-join';
+                
+                // Profile picture
+                const profileContainer = document.createElement('div');
+                profileContainer.className = 'w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0';
+                if (player.profile_picture) {
+                    const img = document.createElement('img');
+                    img.src = player.profile_picture;
+                    img.className = 'w-full h-full object-cover';
+                    profileContainer.appendChild(img);
+                } else {
+                    // Default avatar with first letter
+                    const defaultAvatar = document.createElement('div');
+                    defaultAvatar.className = 'w-full h-full flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold text-lg';
+                    defaultAvatar.textContent = player.name[0].toUpperCase();
+                    profileContainer.appendChild(defaultAvatar);
+                }
+                
+                // Player info
+                const info = document.createElement('div');
+                info.className = 'flex-1 min-w-0';
+                info.innerHTML = `
+                    <p class="text-sm font-medium text-gray-900 truncate">${player.name}</p>
+                    <p class="text-xs text-gray-500">${player.is_host ? 'Host' : 'Player'}</p>
+                `;
+                
+                playerCard.appendChild(profileContainer);
+                playerCard.appendChild(info);
+                playerGrid.appendChild(playerCard);
+            });
+        }
+
+        function updateGameControls(playerCount) {
+            const gameButtons = document.querySelectorAll('.game-btn');
+            const canStart = playerCount >= 2;
+            
+            gameButtons.forEach(btn => {
+                btn.disabled = !canStart;
+                if (!canStart) {
+                    btn.setAttribute('title', 'Need at least 2 players to start');
+                } else {
+                    btn.removeAttribute('title');
+                }
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg text-white text-sm z-50 transition-all duration-300 ${
+                type === 'success' ? 'bg-green-500' :
+                type === 'warning' ? 'bg-yellow-500' :
+                type === 'error' ? 'bg-red-500' :
+                'bg-black/80'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.style.transform = 'translate(-50%, 0)';
+                toast.style.opacity = '1';
+            });
+            
+            // Remove after delay
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
         socket.on('game_started', (data) => {
             if (data.game_type === 'chase') {

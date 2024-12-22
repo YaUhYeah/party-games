@@ -114,11 +114,27 @@
             <div id="nameInput" class="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/90 to-purple-600/90 backdrop-blur-sm">
                 <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-11/12 md:w-96 transform transition-all">
                     <h2 class="text-3xl font-bold text-indigo-600 mb-6">Join Game</h2>
-                    <div id="connectionStatus" class="text-sm text-gray-600 mb-4">
-                        Connecting to server...
+                    <div id="connectionStatus" class="text-sm font-medium mb-4 transition-all">
+                        <div class="flex items-center space-x-2 text-indigo-600">
+                            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Connecting to server...</span>
+                        </div>
                     </div>
-                    <div id="roomInfo" class="text-sm bg-gray-100 p-2 rounded mb-4">
-                        Room ID: <span class="font-mono">{{ room_id }}</span>
+                    <div id="roomInfo" class="text-sm bg-gray-100 p-3 rounded-lg mb-4 border border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">Room Code:</span>
+                            <span class="font-mono bg-white px-2 py-1 rounded border border-gray-200">{{ room_id }}</span>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500" id="roomStatus">
+                            Checking room status...
+                        </div>
+                    </div>
+                    
+                    <!-- Status Messages -->
+                    <div id="statusMessages" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-11/12 max-w-md space-y-2 z-50">
                     </div>
                     <div class="space-y-6">
                         <div>
@@ -234,13 +250,40 @@
                 this.loadSavedProfile();
             },
             
+            showStatus(message, type = 'info') {
+                const statusContainer = document.getElementById('statusMessages');
+                const status = document.createElement('div');
+                status.className = `p-3 rounded-lg shadow-lg text-sm transition-all transform translate-y-2 ${
+                    type === 'error' ? 'bg-red-500 text-white' :
+                    type === 'success' ? 'bg-green-500 text-white' :
+                    'bg-black/80 text-white'
+                }`;
+                status.textContent = message;
+                statusContainer.appendChild(status);
+                
+                // Animate in
+                requestAnimationFrame(() => {
+                    status.style.transform = 'translateY(0)';
+                });
+
+                // Remove after delay
+                setTimeout(() => {
+                    status.style.opacity = '0';
+                    setTimeout(() => status.remove(), 300);
+                }, 3000);
+            },
+
             initProfileDrawing() {
                 console.log('Initializing profile drawing');
                 const canvas = document.getElementById('profileCanvas');
                 if (!canvas) {
                     console.error('Canvas element not found');
+                    this.showStatus('Error initializing drawing canvas', 'error');
                     return;
                 }
+
+                // Show drawing guide
+                this.showStatus('Tap and drag to draw your profile picture', 'info');
 
                 // Set canvas size explicitly
                 canvas.width = 128;
@@ -562,14 +605,27 @@
 
             handleDrawStart(e) {
                 console.log('Draw start', e);
-                if (!this.drawingState) return;
+                if (!this.drawingState) {
+                    console.error('Drawing state not initialized');
+                    this.showStatus('Drawing not ready. Please refresh the page.', 'error');
+                    return;
+                }
                 
                 const { ctx, canvas } = this.drawingState;
                 const rect = canvas.getBoundingClientRect();
                 
                 // Get coordinates
-                const x = (e.offsetX / rect.width) * canvas.width;
-                const y = (e.offsetY / rect.height) * canvas.height;
+                let x, y;
+                if (e.touches) {
+                    const touch = e.touches[0];
+                    x = ((touch.clientX - rect.left) / rect.width) * canvas.width;
+                    y = ((touch.clientY - rect.top) / rect.height) * canvas.height;
+                    console.log('Touch coordinates:', { x, y, raw: { x: touch.clientX, y: touch.clientY } });
+                } else {
+                    x = (e.offsetX / rect.width) * canvas.width;
+                    y = (e.offsetY / rect.height) * canvas.height;
+                    console.log('Mouse coordinates:', { x, y });
+                }
                 
                 this.isDrawing = true;
                 this.lastX = x;
