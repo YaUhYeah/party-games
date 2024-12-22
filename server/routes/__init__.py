@@ -164,13 +164,28 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
     @app.get("/join/{room_id}", response_class=HTMLResponse)
     async def join_game(request: Request, room_id: str):
         print(f"Join request for room {room_id}")
+        print(f"User agent: {request.headers.get('user-agent', 'Unknown')}")
+        print(f"Available rooms: {list(rooms.keys())}")
+        
+        # Check if room exists
         if room_id not in rooms:
-            print(f"Room {room_id} not found. Available rooms: {list(rooms.keys())}")
+            print(f"Room {room_id} not found")
             return templates.TemplateResponse(
                 "error.html",
-                {"request": request, "error": "Room not found"}
+                {
+                    "request": request,
+                    "error": "Room not found or has expired. Please scan the QR code again.",
+                    "show_refresh": True
+                }
             )
-        print(f"Rendering player template for room {room_id}")
+            
+        # Get room info
+        room = rooms[room_id]
+        player_count = len([p for p in room.players.values() if p['connected']])
+        
+        print(f"Rendering player template for room {room_id} (Players: {player_count})")
+        
+        # Render player template with room info
         return templates.TemplateResponse(
             "player.html",
             {
@@ -178,7 +193,8 @@ def register_routes(app: FastAPI, templates: Jinja2Templates, rooms: Dict[str, G
                 "room_id": room_id,
                 "debug": {
                     "available_rooms": list(rooms.keys()),
-                    "player_count": len(rooms[room_id].players) if room_id in rooms else 0
+                    "player_count": player_count,
+                    "is_mobile": "Mobile" in request.headers.get('user-agent', '')
                 }
             }
         )
