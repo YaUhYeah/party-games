@@ -7,7 +7,30 @@ TRIVIA_QUESTIONS = [
         'question': 'What is the largest planet in our solar system?',
         'options': ['Jupiter', 'Saturn', 'Neptune', 'Mars'],
         'correct': 'Jupiter',
-        'category': 'Science'
+        'category': 'Science',
+        'difficulty': 'easy',
+        'explanation': 'Jupiter is the largest planet in our solar system, with a mass more than twice that of all other planets combined.'
+    },
+    {
+        'question': 'What is the process by which plants convert sunlight into energy?',
+        'options': ['Photosynthesis', 'Respiration', 'Fermentation', 'Digestion'],
+        'correct': 'Photosynthesis',
+        'category': 'Science',
+        'difficulty': 'easy',
+        'explanation': 'Photosynthesis is the process where plants use sunlight, water, and carbon dioxide to create oxygen and glucose.'
+    },
+    {
+        'question': 'What is the Heisenberg Uncertainty Principle?',
+        'options': [
+            'The exact position and momentum of a particle cannot be simultaneously known',
+            'Light behaves as both a wave and a particle',
+            'Matter can be converted into energy',
+            'Gravity warps space-time'
+        ],
+        'correct': 'The exact position and momentum of a particle cannot be simultaneously known',
+        'category': 'Science',
+        'difficulty': 'hard',
+        'explanation': 'The Heisenberg Uncertainty Principle states that we cannot simultaneously know both the exact position and momentum of a quantum particle.'
     },
     {
         'question': 'Which planet is known as the Red Planet?',

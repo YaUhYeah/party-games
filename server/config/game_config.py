@@ -2,12 +2,52 @@
 
 # Game configuration
 GAME_CONFIG = {
-    'min_players': 3,
+    'min_players': 2,  # Reduced minimum players
     'max_players': 12,
-    'drawing_time': 60,  # seconds
-    'guess_time': 30,    # seconds
-    'trivia_time': 20,   # seconds
-    'chase_time': 15,    # seconds
+    'time_limits': {
+        'drawing': {
+            '2-3': 90,   # More time for fewer players
+            '4-6': 75,
+            '7+': 60
+        },
+        'guess': {
+            '2-3': 45,
+            '4-6': 35,
+            '7+': 30
+        },
+        'trivia': {
+            '2-3': 25,
+            '4-6': 20,
+            '7+': 15
+        },
+        'chase': {
+            '2': 20,     # Head-to-head mode
+            '3+': 15
+        }
+    },
+    'game_modes': {
+        'chinese_whispers': {
+            'min_players': 2,
+            'two_player_mode': {
+                'rounds': 5,        # More rounds for 2 players
+                'hints_allowed': 2  # Extra hints for balance
+            }
+        },
+        'trivia': {
+            'min_players': 2,
+            'two_player_mode': {
+                'head_to_head': True,  # Direct competition
+                'steal_points': True   # Steal points on wrong answers
+            }
+        },
+        'chase': {
+            'min_players': 2,
+            'two_player_mode': {
+                'roles_swap': True,    # Players swap chaser/contestant roles
+                'quick_fire': True     # Faster rounds for 2 players
+            }
+        }
+    },
     'rounds_per_game': 3,
     'chase_board_size': 7,  # steps between chaser and safety
     'idle_timeout': 300,  # 5 minutes
@@ -20,7 +60,17 @@ GAME_CONFIG = {
     },
     'difficulty_scaling': {
         'enabled': True,
-        'scale_factor': 0.1  # Increase difficulty by 10% each round
+        'scale_factor': 0.1,  # Increase difficulty by 10% each round
+        'performance_threshold': {
+            'easy_to_medium': 0.7,  # 70% success rate to advance
+            'medium_to_hard': 0.8,  # 80% success rate to advance
+            'fallback': 0.3  # Fall back to easier difficulty below 30%
+        },
+        'time_bonus': {
+            'easy': 1.2,  # 20% more time
+            'medium': 1.0,  # Standard time
+            'hard': 0.8  # 20% less time
+        }
     },
     'points': {
         'correct_guess': 100,
@@ -93,12 +143,36 @@ MUSIC_CONFIG = {
     }
 }
 
-# Enhanced game topics with varied difficulty levels
+# Enhanced game topics with varied difficulty levels and categories
 GAME_TOPICS = {
     'animals': {
-        'easy': ['cat', 'dog', 'fish', 'bird', 'pig'],
-        'medium': ['elephant', 'giraffe', 'penguin', 'kangaroo', 'octopus'],
-        'hard': ['platypus', 'chameleon', 'narwhal', 'armadillo', 'pangolin']
+        'easy': [
+            'cat', 'dog', 'fish', 'bird', 'pig', 'cow', 'horse', 'sheep', 'duck', 'chicken',
+            'rabbit', 'mouse', 'frog', 'bear', 'lion'
+        ],
+        'medium': [
+            'elephant', 'giraffe', 'penguin', 'kangaroo', 'octopus', 'dolphin', 'tiger',
+            'panda', 'koala', 'zebra', 'monkey', 'gorilla', 'hippo', 'rhino', 'camel'
+        ],
+        'hard': [
+            'platypus', 'chameleon', 'narwhal', 'armadillo', 'pangolin', 'axolotl',
+            'echidna', 'quokka', 'tardigrade', 'capybara', 'lemur', 'sloth', 'tapir',
+            'numbat', 'okapi'
+        ]
+    },
+    'mythical_creatures': {
+        'easy': [
+            'dragon', 'unicorn', 'mermaid', 'fairy', 'phoenix', 'giant', 'troll',
+            'elf', 'wizard', 'witch'
+        ],
+        'medium': [
+            'griffin', 'centaur', 'pegasus', 'minotaur', 'sphinx', 'cyclops',
+            'hydra', 'siren', 'goblin', 'vampire'
+        ],
+        'hard': [
+            'chimera', 'basilisk', 'kraken', 'leviathan', 'banshee', 'wendigo',
+            'kitsune', 'djinn', 'manticore', 'cockatrice'
+        ]
     },
     'food': {
         'easy': ['apple', 'bread', 'cake', 'milk', 'egg'],

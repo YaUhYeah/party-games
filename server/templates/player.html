@@ -2,11 +2,95 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Play Game - Party Games Hub</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <style>
+        /* Mobile optimizations */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
+        /* Prevent text selection */
+        .no-select {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        /* Mobile-friendly canvas */
+        .drawing-canvas {
+            touch-action: none;
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            aspect-ratio: 4/3;
+        }
+        
+        /* Mobile-friendly buttons */
+        .game-button {
+            min-height: 44px; /* iOS minimum tap target size */
+            padding: 12px 20px;
+            margin: 8px;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: transform 0.1s;
+        }
+        
+        .game-button:active {
+            transform: scale(0.95);
+        }
+        
+        /* Responsive game area */
+        @media (max-width: 640px) {
+            .game-container {
+                padding: 12px;
+            }
+            
+            .drawing-tools {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(10px);
+                padding: 8px;
+                z-index: 100;
+                display: flex;
+                justify-content: space-around;
+                box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            }
+            
+            .tool-button {
+                width: 40px;
+                height: 40px;
+                padding: 8px;
+                border-radius: 50%;
+            }
+        }
+        
+        /* Smooth scrolling */
+        .smooth-scroll {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+        
+        /* Loading spinner optimization */
+        @keyframes optimized-spin {
+            to { transform: rotate(360deg); }
+        }
+        .optimized-spinner {
+            animation: optimized-spin 1s linear infinite;
+            will-change: transform;
+        }
+    </style>
 </head>
 <body>
     <!-- Debug Overlay -->
@@ -30,21 +114,97 @@
             <div id="nameInput" class="fixed inset-0 flex items-center justify-center bg-gradient-to-br from-indigo-500/90 to-purple-600/90 backdrop-blur-sm">
                 <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-11/12 md:w-96 transform transition-all">
                     <h2 class="text-3xl font-bold text-indigo-600 mb-6">Join Game</h2>
-                    <div id="connectionStatus" class="text-sm text-gray-600 mb-4">
-                        Connecting to server...
+                    <div id="connectionStatus" class="text-sm font-medium mb-4 transition-all">
+                        <div class="flex items-center space-x-2 text-indigo-600">
+                            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Connecting to server...</span>
+                        </div>
                     </div>
-                    <div id="roomInfo" class="text-sm bg-gray-100 p-2 rounded mb-4">
-                        Room ID: <span class="font-mono">{{ room_id }}</span>
+                    <div id="roomInfo" class="text-sm bg-gray-100 p-3 rounded-lg mb-4 border border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">Room Code:</span>
+                            <span class="font-mono bg-white px-2 py-1 rounded border border-gray-200">{{ room_id }}</span>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500" id="roomStatus">
+                            Checking room status...
+                        </div>
                     </div>
-                    <div class="space-y-4">
+                    
+                    <!-- Status Messages -->
+                    <div id="statusMessages" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 w-11/12 max-w-md space-y-2 z-50">
+                    </div>
+                    <div class="space-y-6">
                         <div>
                             <label for="playerName" class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
                             <input type="text" id="playerName" 
                                    class="w-full p-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all"
-                                   placeholder="Enter your name">
+                                   placeholder="Enter your name"
+                                   maxlength="20">
+                            <p class="text-xs text-gray-500 mt-1">Maximum 20 characters</p>
                         </div>
+
+                        <div class="profile-picture-section">
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Profile Picture</label>
+                            <div class="profile-canvas-container relative bg-gray-50 rounded-xl p-4 border-2 border-dashed border-gray-300 hover:border-indigo-400 transition-all">
+                                <canvas id="profileCanvas" 
+                                        class="w-32 h-32 mx-auto bg-white rounded-full shadow-inner cursor-crosshair touch-none"
+                                        width="128" height="128"></canvas>
+                                
+                                <div class="drawing-tools flex justify-center mt-4 space-x-2">
+                                    <!-- Color picker -->
+                                    <div class="color-picker flex space-x-1">
+                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                style="background-color: #000000"
+                                                data-color="#000000"></button>
+                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                style="background-color: #FF0000"
+                                                data-color="#FF0000"></button>
+                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                style="background-color: #00FF00"
+                                                data-color="#00FF00"></button>
+                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                style="background-color: #0000FF"
+                                                data-color="#0000FF"></button>
+                                    </div>
+
+                                    <!-- Tool buttons -->
+                                    <div class="tool-buttons flex space-x-1">
+                                        <button class="tool-btn w-8 h-8 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                data-tool="brush" title="Brush">
+                                            <i class="fas fa-paint-brush text-gray-600"></i>
+                                        </button>
+                                        <button class="tool-btn w-8 h-8 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                data-tool="eraser" title="Eraser">
+                                            <i class="fas fa-eraser text-gray-600"></i>
+                                        </button>
+                                        <button class="tool-btn w-8 h-8 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                onclick="window.gameState.clearProfileCanvas()" title="Clear">
+                                            <i class="fas fa-trash-alt text-gray-600"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Size slider -->
+                                <div class="size-slider mt-4">
+                                    <input type="range" 
+                                           id="brushSize" 
+                                           min="1" 
+                                           max="20" 
+                                           value="4"
+                                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                </div>
+
+                                <div class="text-xs text-gray-500 text-center mt-2">
+                                    Draw your profile picture or tap to start
+                                </div>
+                            </div>
+                        </div>
+
                         <button onclick="window.gameState.joinGame()" 
-                                class="w-full bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2">
+                                class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2">
                             <span class="join-text font-semibold">Join Game</span>
                             <span class="loading-spinner hidden">
                                 <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -82,23 +242,860 @@
             init() {
                 console.log('Initializing game with room ID:', this.roomId);
                 this.initSocket();
+                this.initProfileDrawing();
                 this.addKeyboardListeners();
                 this.updateDebugInfo();
+                
+                // Load saved profile if exists
+                this.loadSavedProfile();
+            },
+            
+            showStatus(message, type = 'info') {
+                const statusContainer = document.getElementById('statusMessages');
+                const status = document.createElement('div');
+                status.className = `p-3 rounded-lg shadow-lg text-sm transition-all transform translate-y-2 ${
+                    type === 'error' ? 'bg-red-500 text-white' :
+                    type === 'success' ? 'bg-green-500 text-white' :
+                    'bg-black/80 text-white'
+                }`;
+                status.textContent = message;
+                statusContainer.appendChild(status);
+                
+                // Animate in
+                requestAnimationFrame(() => {
+                    status.style.transform = 'translateY(0)';
+                });
+
+                // Remove after delay
+                setTimeout(() => {
+                    status.style.opacity = '0';
+                    setTimeout(() => status.remove(), 300);
+                }, 3000);
+            },
+
+            initProfileDrawing() {
+                console.log('Initializing profile drawing');
+                const canvas = document.getElementById('profileCanvas');
+                if (!canvas) {
+                    console.error('Canvas element not found');
+                    this.showStatus('Error initializing drawing canvas', 'error');
+                    return;
+                }
+
+                // Show drawing guide
+                this.showStatus('Tap and drag to draw your profile picture', 'info');
+
+                // Set canvas size explicitly
+                canvas.width = 128;
+                canvas.height = 128;
+                
+                // Initialize drawing state
+                this.isDrawing = false;
+                this.currentColor = '#000000';
+                this.currentTool = 'brush';
+                this.brushSize = 4;
+                this.lastX = 0;
+                this.lastY = 0;
+                
+                // Get context
+                const ctx = canvas.getContext('2d');
+                
+                // Set initial canvas state
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // Store in state
+                this.drawingState = {
+                    canvas,
+                    ctx,
+                    undoStack: [],
+                    redoStack: []
+                };
+
+                // Add mouse events
+                canvas.addEventListener('mousedown', this.handleDrawStart.bind(this));
+                canvas.addEventListener('mousemove', this.handleDrawMove.bind(this));
+                canvas.addEventListener('mouseup', this.handleDrawEnd.bind(this));
+                canvas.addEventListener('mouseleave', this.handleDrawEnd.bind(this));
+
+                // Add touch events
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    this.handleDrawStart({ offsetX: x, offsetY: y });
+                });
+
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    this.handleDrawMove({ offsetX: x, offsetY: y });
+                });
+
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.handleDrawEnd();
+                });
+
+                // Initialize color buttons
+                document.querySelectorAll('.color-picker button').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.currentColor = btn.dataset.color;
+                        this.updateToolStyles();
+                    });
+                });
+
+                // Initialize tool buttons
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    if (btn.dataset.tool) {
+                        btn.addEventListener('click', () => {
+                            this.currentTool = btn.dataset.tool;
+                            this.updateToolStyles();
+                        });
+                    }
+                });
+
+                console.log('Drawing initialization complete');
+
+                // Initialize canvas with white background
+                this.profileState.ctx.fillStyle = '#FFFFFF';
+                this.profileState.ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Enable touch action
+                canvas.style.touchAction = 'none';
+                
+                // Add visual feedback for touch
+                canvas.addEventListener('touchstart', () => {
+                    canvas.style.transform = 'scale(0.98)';
+                }, { passive: true });
+                
+                canvas.addEventListener('touchend', () => {
+                    canvas.style.transform = 'scale(1)';
+                }, { passive: true });
+                
+                // Initialize canvas
+                this.profileState.ctx.fillStyle = '#FFFFFF';
+                this.profileState.ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Save initial state
+                this.saveProfileState();
+                
+                // Add event listeners
+                canvas.addEventListener('mousedown', this.startProfileDrawing.bind(this));
+                canvas.addEventListener('mousemove', this.drawProfile.bind(this));
+                canvas.addEventListener('mouseup', this.endProfileDrawing.bind(this));
+                canvas.addEventListener('mouseleave', this.endProfileDrawing.bind(this));
+                
+                // Enhanced touch events with scaling
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    const x = (touch.clientX - rect.left) * scaleX;
+                    const y = (touch.clientY - rect.top) * scaleY;
+                    this.isDrawing = true;
+                    this.startProfileDrawing({ offsetX: x, offsetY: y });
+                }, { passive: false });
+                
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (!this.isDrawing) return;
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    const x = (touch.clientX - rect.left) * scaleX;
+                    const y = (touch.clientY - rect.top) * scaleY;
+                    this.drawProfile({ offsetX: x, offsetY: y });
+                }, { passive: false });
+                
+                canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.isDrawing = false;
+                    this.endProfileDrawing();
+                }, { passive: false });
+
+                canvas.addEventListener('touchcancel', (e) => {
+                    e.preventDefault();
+                    this.isDrawing = false;
+                    this.endProfileDrawing();
+                }, { passive: false });
+                
+                // Color picker
+                const colorButtons = document.querySelectorAll('.color-picker button');
+                colorButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.profileState.currentColor = btn.dataset.color;
+                        this.updateToolStyles();
+                    });
+                });
+                
+                // Tool buttons
+                const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
+                toolButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        this.profileState.currentTool = btn.dataset.tool;
+                        this.updateToolStyles();
+                    });
+                });
+                
+                // Brush size
+                const sizeSlider = document.getElementById('brushSize');
+                if (sizeSlider) {
+                    sizeSlider.addEventListener('input', (e) => {
+                        this.profileState.brushSize = parseInt(e.target.value);
+                    });
+                }
+                
+                this.updateToolStyles();
+            },
+            
+            startProfileDrawing(e) {
+                if (!this.profileState) return;
+                const { ctx } = this.profileState;
+                
+                // Get coordinates, handling both mouse and touch events
+                let x, y;
+                if (e.touches) {
+                    const rect = this.profileState.canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    x = (touch.clientX - rect.left) * (this.profileState.canvas.width / rect.width);
+                    y = (touch.clientY - rect.top) * (this.profileState.canvas.height / rect.height);
+                } else {
+                    x = e.offsetX;
+                    y = e.offsetY;
+                }
+                
+                this.profileState.isDrawing = true;
+                this.profileState.lastX = x;
+                this.profileState.lastY = y;
+                
+                // Start new path
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                
+                // Draw initial point for better touch response
+                ctx.arc(x, y, this.profileState.brushSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Save state for undo
+                this.saveProfileState();
+                
+                // Provide haptic feedback if available
+                if (window.navigator.vibrate) {
+                    window.navigator.vibrate(50);
+                }
+            },
+            
+            drawProfile(e) {
+                if (!this.profileState || !this.profileState.isDrawing) return;
+                
+                const { ctx, currentColor, currentTool, brushSize, canvas } = this.profileState;
+                
+                // Get coordinates, handling both mouse and touch events
+                let x, y;
+                if (e.touches) {
+                    const rect = canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+                    y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+                } else {
+                    x = e.offsetX;
+                    y = e.offsetY;
+                }
+                
+                // Set drawing styles
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                if (currentTool === 'eraser') {
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.globalCompositeOperation = 'destination-out';
+                } else {
+                    ctx.strokeStyle = currentColor;
+                    ctx.fillStyle = currentColor;
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                
+                // Draw smooth line using quadratic curve
+                ctx.beginPath();
+                ctx.moveTo(this.profileState.lastX, this.profileState.lastY);
+                
+                // Calculate control point for smooth curve
+                const cx = (this.profileState.lastX + x) / 2;
+                const cy = (this.profileState.lastY + y) / 2;
+                ctx.quadraticCurveTo(cx, cy, x, y);
+                ctx.stroke();
+                
+                // Update last position
+                this.profileState.lastX = x;
+                this.profileState.lastY = y;
+            },
+            
+            endProfileDrawing() {
+                this.profileState.isDrawing = false;
+                this.saveProfileToLocalStorage();
+            },
+            
+            clearProfileCanvas() {
+                const { canvas, ctx } = this.profileState;
+                
+                // Save current state for undo
+                this.saveProfileState();
+                
+                // Clear canvas
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                this.saveProfileToLocalStorage();
+            },
+            
+            saveProfileState() {
+                const { canvas } = this.profileState;
+                const imageData = canvas.toDataURL('image/png');
+                this.profileState.undoStack.push(imageData);
+                
+                // Limit stack size
+                if (this.profileState.undoStack.length > 10) {
+                    this.profileState.undoStack.shift();
+                }
+                
+                // Clear redo stack
+                this.profileState.redoStack = [];
+            },
+            
+            saveProfileToLocalStorage() {
+                const { canvas } = this.profileState;
+                const imageData = canvas.toDataURL('image/png');
+                localStorage.setItem('playerProfile', imageData);
+            },
+            
+            loadSavedProfile() {
+                const savedProfile = localStorage.getItem('playerProfile');
+                if (savedProfile && this.profileState) {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.profileState.ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = savedProfile;
+                }
+            },
+            
+            updateToolStyles() {
+                const toolButtons = document.querySelectorAll('.tool-btn[data-tool]');
+                toolButtons.forEach(btn => {
+                    btn.classList.toggle('bg-indigo-100', btn.dataset.tool === this.currentTool);
+                });
+                
+                const colorButtons = document.querySelectorAll('.color-picker button');
+                colorButtons.forEach(btn => {
+                    btn.classList.toggle('ring-2', btn.dataset.color === this.currentColor);
+                });
+            },
+
+            handleDrawStart(e) {
+                console.log('Draw start', e);
+                if (!this.drawingState) {
+                    console.error('Drawing state not initialized');
+                    this.showStatus('Drawing not ready. Please refresh the page.', 'error');
+                    return;
+                }
+                
+                const { ctx, canvas } = this.drawingState;
+                const rect = canvas.getBoundingClientRect();
+                
+                // Get coordinates
+                let x, y;
+                if (e.touches) {
+                    const touch = e.touches[0];
+                    x = ((touch.clientX - rect.left) / rect.width) * canvas.width;
+                    y = ((touch.clientY - rect.top) / rect.height) * canvas.height;
+                    console.log('Touch coordinates:', { x, y, raw: { x: touch.clientX, y: touch.clientY } });
+                } else {
+                    x = (e.offsetX / rect.width) * canvas.width;
+                    y = (e.offsetY / rect.height) * canvas.height;
+                    console.log('Mouse coordinates:', { x, y });
+                }
+                
+                this.isDrawing = true;
+                this.lastX = x;
+                this.lastY = y;
+                
+                // Configure drawing style
+                ctx.strokeStyle = this.currentColor;
+                ctx.lineWidth = this.brushSize;
+                
+                if (this.currentTool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+                
+                // Start path
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                
+                // Draw initial point
+                ctx.arc(x, y, this.brushSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Save state for undo
+                this.saveDrawingState();
+                
+                // Haptic feedback
+                if (window.navigator.vibrate) {
+                    window.navigator.vibrate(50);
+                }
+            },
+            
+            handleDrawMove(e) {
+                if (!this.isDrawing || !this.drawingState) return;
+                
+                const { ctx, canvas } = this.drawingState;
+                const rect = canvas.getBoundingClientRect();
+                
+                // Get coordinates
+                const x = (e.offsetX / rect.width) * canvas.width;
+                const y = (e.offsetY / rect.height) * canvas.height;
+                
+                // Draw line
+                ctx.beginPath();
+                ctx.moveTo(this.lastX, this.lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                
+                // Update position
+                this.lastX = x;
+                this.lastY = y;
+            },
+            
+            handleDrawEnd() {
+                if (!this.drawingState) return;
+                
+                this.isDrawing = false;
+                this.saveDrawingState();
+            },
+            
+            saveDrawingState() {
+                if (!this.drawingState) return;
+                
+                const { canvas } = this.drawingState;
+                const imageData = canvas.toDataURL('image/png');
+                this.drawingState.undoStack.push(imageData);
+                
+                // Limit stack size
+                if (this.drawingState.undoStack.length > 10) {
+                    this.drawingState.undoStack.shift();
+                }
+                
+                // Clear redo stack
+                this.drawingState.redoStack = [];
+            },
+
+            async validateProfilePicture(profileData) {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Get image data
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const data = imageData.data;
+                        
+                        // Check if there are any non-white pixels
+                        let hasDrawing = false;
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i];
+                            const g = data[i + 1];
+                            const b = data[i + 2];
+                            const a = data[i + 3];
+                            
+                            // Check if pixel is not white or transparent
+                            if (a > 0 && (r !== 255 || g !== 255 || b !== 255)) {
+                                hasDrawing = true;
+                                break;
+                            }
+                        }
+                        
+                        resolve(hasDrawing);
+                    };
+                    img.src = profileData;
+                });
+            },
+
+            async generateDefaultProfile(letter) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                
+                // Generate random pastel color
+                const hue = Math.random() * 360;
+                const saturation = 70 + Math.random() * 10; // 70-80%
+                const lightness = 75 + Math.random() * 10;  // 75-85%
+                const bgColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                
+                // Draw background
+                ctx.fillStyle = bgColor;
+                ctx.beginPath();
+                ctx.arc(64, 64, 64, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw letter
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 64px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(letter, 64, 64);
+                
+                // Add subtle shadow
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                ctx.shadowBlur = 5;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+                
+                return canvas;
             },
 
             // Initialize socket connection
             initSocket() {
+                // Basic socket initialization with reliable defaults
                 this.socket = io({
                     path: '/socket.io/',
                     transports: ['polling', 'websocket'],
-                    reconnectionAttempts: 10,
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
                     reconnectionDelay: 1000,
                     reconnectionDelayMax: 5000,
                     timeout: 20000,
-                    query: { room_id: this.roomId }
+                    autoConnect: true,
+                    query: { 
+                        room_id: this.roomId
+                    },
+                    // Performance optimizations
+                    perMessageDeflate: true,  // Enable WebSocket compression
+                    transportOptions: {
+                        polling: {
+                            extraHeaders: {
+                                'X-Client-Type': 'mobile'
+                            }
+                        }
+                    },
+                    // Batch small packets
+                    parser: {
+                        protocol: 4,
+                        binaryType: 'arraybuffer'
+                    }
+                });
+                
+                // Initialize touch gesture support
+                this.initTouchGestures();
+
+                // Connection state recovery
+                this.socket.on('disconnect', (reason) => {
+                    console.log('Disconnected:', reason);
+                    this.showNotification('Connection lost. Attempting to reconnect...', 'warning');
+                    this.debugState.socketConnected = false;
+                    this.debugState.lastError = {
+                        time: new Date().toISOString(),
+                        type: 'disconnect',
+                        reason: reason
+                    };
+                    this.updateDebugInfo();
+                    
+                    // Attempt to recover state after reconnection
+                    if (this.hasJoined) {
+                        this.socket.once('connect', () => {
+                            this.socket.emit('recover_state', {
+                                room_id: this.roomId,
+                                client_id: this.socket.io.opts.query.client_id
+                            });
+                        });
+                    }
+                });
+
+                // Handle state recovery response
+                this.socket.on('state_recovered', (state) => {
+                    console.log('State recovered:', state);
+                    this.showNotification('Game state recovered!', 'success');
+                    if (state.gameArea) {
+                        document.getElementById('gameArea').innerHTML = state.gameArea;
+                    }
                 });
 
                 this.setupSocketListeners();
+                this.socket.connect();  // Manual connection
+            },
+
+            generateClientId() {
+                const timestamp = new Date().getTime();
+                const random = Math.floor(Math.random() * 1000000);
+                return `${timestamp}-${random}`;
+            },
+
+            detectPlatform() {
+                const ua = navigator.userAgent;
+                const platform = {
+                    mobile: /Mobile|Android|iOS|iPhone|iPad|iPod/i.test(ua),
+                    ios: /iPad|iPhone|iPod/.test(ua),
+                    android: /Android/.test(ua),
+                    tablet: /Tablet|iPad/i.test(ua)
+                };
+                return JSON.stringify(platform);
+            },
+
+            initTouchGestures() {
+                // Initialize Hammer.js for touch gestures
+                const gameArea = document.getElementById('gameArea');
+                if (!gameArea) return;
+
+                const hammer = new Hammer(gameArea);
+                
+                // Drawing gestures
+                hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+                hammer.get('pinch').set({ enable: true });
+                
+                // Handle drawing gestures
+                hammer.on('panstart', (e) => {
+                    if (this.isDrawing) {
+                        this.handleDrawStart(e.center.x, e.center.y);
+                    }
+                });
+                
+                hammer.on('panmove', (e) => {
+                    if (this.isDrawing) {
+                        this.handleDrawMove(e.center.x, e.center.y);
+                    }
+                });
+                
+                hammer.on('panend', () => {
+                    if (this.isDrawing) {
+                        this.handleDrawEnd();
+                    }
+                });
+                
+                // Pinch to zoom canvas
+                hammer.on('pinch', (e) => {
+                    if (this.isDrawing) {
+                        const canvas = document.querySelector('.drawing-canvas');
+                        if (canvas) {
+                            const scale = Math.max(0.5, Math.min(2, e.scale));
+                            canvas.style.transform = `scale(${scale})`;
+                        }
+                    }
+                });
+                
+                // Double tap for quick actions
+                hammer.on('doubletap', (e) => {
+                    const target = e.target;
+                    if (target.classList.contains('tool-button')) {
+                        // Quick tool selection
+                        this.selectTool(target.dataset.tool);
+                    }
+                });
+                
+                // Initialize touch optimizations
+                this.initTouchOptimizations();
+            },
+            
+            handleDrawStart(x, y) {
+                if (!this.drawingOptimizations) return;
+                
+                const canvas = document.querySelector('.drawing-canvas');
+                if (!canvas) return;
+                
+                // Get relative position
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const point = {
+                    x: (x - rect.left) * scaleX,
+                    y: (y - rect.top) * scaleY,
+                    pressure: this.drawingOptimizations.pressureSupport ? event.pressure : 1
+                };
+                
+                this.drawingOptimizations.drawPoints = [point];
+                this.drawPoint(point);
+            },
+            
+            handleDrawMove(x, y) {
+                if (!this.drawingOptimizations || !this.isDrawing) return;
+                
+                const canvas = document.querySelector('.drawing-canvas');
+                if (!canvas) return;
+                
+                // Get relative position
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const point = {
+                    x: (x - rect.left) * scaleX,
+                    y: (y - rect.top) * scaleY,
+                    pressure: this.drawingOptimizations.pressureSupport ? event.pressure : 1
+                };
+                
+                // Add point to batch
+                this.drawingOptimizations.drawPoints.push(point);
+                
+                // Process batch if size threshold reached
+                if (this.drawingOptimizations.drawPoints.length >= this.drawingOptimizations.batchSize) {
+                    this.processBatch();
+                } else {
+                    // Schedule batch processing
+                    if (this.drawingOptimizations.drawTimer) {
+                        clearTimeout(this.drawingOptimizations.drawTimer);
+                    }
+                    this.drawingOptimizations.drawTimer = setTimeout(() => {
+                        this.processBatch();
+                    }, this.drawingOptimizations.batchTimeout);
+                }
+            },
+            
+            processBatch() {
+                if (!this.drawingOptimizations || !this.drawingOptimizations.drawPoints.length) return;
+                
+                const points = this.drawingOptimizations.drawPoints;
+                const ctx = this.drawingOptimizations.ctx;
+                
+                // Optimize path drawing
+                ctx.beginPath();
+                ctx.moveTo(points[0].x, points[0].y);
+                
+                // Use quadratic curves for smoother lines
+                for (let i = 1; i < points.length - 1; i++) {
+                    const xc = (points[i].x + points[i + 1].x) / 2;
+                    const yc = (points[i].y + points[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+                }
+                
+                // Draw the path
+                ctx.stroke();
+                
+                // Update main canvas
+                const canvas = document.querySelector('.drawing-canvas');
+                if (canvas) {
+                    const mainCtx = canvas.getContext('2d');
+                    mainCtx.drawImage(this.drawingOptimizations.offscreenCanvas, 0, 0);
+                }
+                
+                // Clear batch
+                this.drawingOptimizations.drawPoints = [];
+                
+                // Monitor performance
+                this.drawingOptimizations.frameCount++;
+                const now = performance.now();
+                if (now - this.drawingOptimizations.lastFrameTime >= 1000) {
+                    this.drawingOptimizations.fps = this.drawingOptimizations.frameCount;
+                    this.drawingOptimizations.frameCount = 0;
+                    this.drawingOptimizations.lastFrameTime = now;
+                    
+                    // Adjust batch size based on FPS
+                    if (this.drawingOptimizations.fps < 30) {
+                        this.drawingOptimizations.batchSize = Math.min(10, this.drawingOptimizations.batchSize + 1);
+                    } else if (this.drawingOptimizations.fps > 55) {
+                        this.drawingOptimizations.batchSize = Math.max(3, this.drawingOptimizations.batchSize - 1);
+                    }
+                }
+            },
+            
+            drawPoint(point) {
+                if (!this.drawingOptimizations || !this.drawingOptimizations.ctx) return;
+                
+                const ctx = this.drawingOptimizations.ctx;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, this.currentBrushSize * point.pressure, 0, Math.PI * 2);
+                ctx.fill();
+            },
+            
+            initTouchOptimizations() {
+                // Drawing optimizations
+                this.drawingOptimizations = {
+                    // Batch drawing updates
+                    batchSize: 5,
+                    batchTimeout: 50,
+                    drawPoints: [],
+                    drawTimer: null,
+                    
+                    // Canvas optimization
+                    offscreenCanvas: null,
+                    ctx: null,
+                    
+                    // Touch pressure support
+                    pressureSupport: 'pressure' in TouchEvent.prototype,
+                    
+                    // Performance monitoring
+                    lastFrameTime: 0,
+                    frameCount: 0,
+                    fps: 0
+                };
+                
+                // Initialize offscreen canvas
+                const canvas = document.querySelector('.drawing-canvas');
+                if (canvas) {
+                    this.drawingOptimizations.offscreenCanvas = new OffscreenCanvas(
+                        canvas.width,
+                        canvas.height
+                    );
+                    this.drawingOptimizations.ctx = this.drawingOptimizations.offscreenCanvas.getContext('2d', {
+                        alpha: false,
+                        desynchronized: true
+                    });
+                }
+                
+                // Prevent unwanted touch behaviors
+                document.addEventListener('touchmove', (e) => {
+                    if (e.target.classList.contains('drawing-canvas')) {
+                        e.preventDefault();
+                        
+                        // Handle drawing with pressure sensitivity
+                        if (this.isDrawing && this.drawingOptimizations.pressureSupport) {
+                            const touch = e.touches[0];
+                            this.updateBrushSize(touch.pressure * 20);  // Scale pressure to brush size
+                        }
+                    }
+                }, { passive: false });
+                
+                // Optimize scrolling
+                const scrollElements = document.querySelectorAll('.smooth-scroll');
+                scrollElements.forEach(el => {
+                    el.addEventListener('touchstart', () => {
+                        el.style.overflow = 'auto';
+                    });
+                    
+                    el.addEventListener('touchend', () => {
+                        setTimeout(() => {
+                            el.style.overflow = 'hidden';
+                        }, 50);
+                    });
+                });
+                
+                // Add touch feedback
+                const buttons = document.querySelectorAll('.game-button');
+                buttons.forEach(btn => {
+                    btn.addEventListener('touchstart', () => {
+                        btn.style.transform = 'scale(0.95)';
+                    });
+                    
+                    btn.addEventListener('touchend', () => {
+                        btn.style.transform = 'scale(1)';
+                    });
+                });
             },
 
             // Set up socket event listeners
@@ -137,12 +1134,19 @@
             },
 
             // Join game function
-            joinGame() {
+            async joinGame() {
+                console.log('Join game called');
                 const playerName = document.getElementById('playerName').value.trim();
                 console.log('Attempting to join with name:', playerName);
 
                 if (!playerName) {
                     this.showNotification('Please enter your name', 'error');
+                    return;
+                }
+
+                // Validate name length
+                if (playerName.length < 2 || playerName.length > 20) {
+                    this.showNotification('Name must be between 2 and 20 characters', 'error');
                     return;
                 }
 
@@ -156,11 +1160,85 @@
                     joinButton.querySelector('.loading-spinner').classList.remove('hidden');
                 }
 
-                this.socket.emit('join_room', {
-                    room_id: this.roomId,
-                    player_name: playerName,
-                    is_host: false
-                });
+                try {
+                    // Ensure socket is connected
+                    if (!this.socket.connected) {
+                        console.log('Socket not connected, attempting to connect...');
+                        await new Promise((resolve, reject) => {
+                            this.socket.connect();
+                            this.socket.once('connect', resolve);
+                            this.socket.once('connect_error', reject);
+                            // Timeout after 5 seconds
+                            setTimeout(() => reject(new Error('Connection timeout')), 5000);
+                        });
+                    }
+
+                    // Get profile picture data
+                    let profileData;
+                    if (this.profileState && this.profileState.canvas) {
+                        profileData = this.profileState.canvas.toDataURL('image/png', 0.8);
+                        
+                        // Validate profile picture (ensure it's not empty)
+                        const hasDrawing = await this.validateProfilePicture(profileData);
+                        if (!hasDrawing) {
+                            console.log('No drawing found, generating default profile');
+                            // Generate default profile with first letter of name
+                            const defaultProfile = await this.generateDefaultProfile(playerName[0].toUpperCase());
+                            this.profileState.ctx.drawImage(defaultProfile, 0, 0);
+                            profileData = this.profileState.canvas.toDataURL('image/png', 0.8);
+                        }
+
+                        // Save final profile
+                        this.saveProfileToLocalStorage();
+                    } else {
+                        console.warn('Profile state or canvas not initialized');
+                        // Generate a default profile
+                        const defaultProfile = await this.generateDefaultProfile(playerName[0].toUpperCase());
+                        profileData = defaultProfile.toDataURL('image/png', 0.8);
+                    }
+
+                    console.log('Emitting join_room event');
+                    // Join room with profile
+                    this.socket.emit('join_room', {
+                        room_id: this.roomId,
+                        player_name: playerName,
+                        profile_picture: profileData,
+                        is_host: false
+                    });
+
+                    // Set up response timeout
+                    const joinTimeout = setTimeout(() => {
+                        console.error('Join room timeout');
+                        this.showNotification('Connection timeout. Please try again.', 'error');
+                        this.resetJoinButton(joinButton);
+                    }, 10000);
+
+                    // Wait for response
+                    await new Promise((resolve, reject) => {
+                        this.socket.once('join_confirmed', () => {
+                            clearTimeout(joinTimeout);
+                            resolve();
+                        });
+                        this.socket.once('join_error', (error) => {
+                            clearTimeout(joinTimeout);
+                            reject(new Error(error.message || 'Failed to join game'));
+                        });
+                    });
+
+                } catch (error) {
+                    console.error('Error joining game:', error);
+                    this.showNotification(error.message || 'Failed to join game. Please try again.', 'error');
+                    this.resetJoinButton(joinButton);
+                }
+            },
+
+            resetJoinButton(button) {
+                if (button) {
+                    button.disabled = false;
+                    button.querySelector('.join-text').textContent = 'Join Game';
+                    button.querySelector('.loading-spinner').classList.add('hidden');
+                }
+            },
             },
 
             // UI helper functions

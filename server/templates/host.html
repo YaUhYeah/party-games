@@ -7,6 +7,18 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+    <!-- Amazon Fire TV Support -->
+    <script src="https://resources.amazonwebapps.com/v1/latest/Amazon-Web-App-API.min.js"></script>
+    <!-- DIAL Protocol Support for Fire TV -->
+    <script src="https://www.amazonwebapps.com/scripts/dial.js"></script>
+    <!-- AirPlay support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-tv-app-capable" content="yes">
+    <!-- Smart TV support -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="samsung-tv-app" content="true">
     <style>
         /* TV Mode Styles */
         .tv-mode {
@@ -85,8 +97,131 @@
 
                 <div>
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
-                    <div id="playerList" class="player-list p-4 min-h-[200px]">
-                        <p class="text-gray-500">Waiting for players to join...</p>
+                    <div id="playerList" class="player-list p-4 min-h-[200px] space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
+                            <div class="text-sm text-gray-500" id="minPlayersStatus">
+                                Need 2+ players to start
+                            </div>
+                        </div>
+                        <div id="playerGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <!-- Players will be added here dynamically -->
+                        </div>
+                        <div id="emptyState" class="text-center py-8">
+                            <div class="text-gray-400">
+                                <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                <p>Waiting for players to join...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Casting Controls -->
+            <div class="fixed top-4 right-4 flex items-center space-x-4 z-50">
+                <!-- Cast Button -->
+                <google-cast-launcher id="castButton" class="w-10 h-10"></google-cast-launcher>
+                
+                <!-- Fire TV Button -->
+                <button onclick="showFireTVDialog()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Cast to Fire TV">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1h-7v2h3a1 1 0 110 2H9a1 1 0 110-2h3v-2H4a1 1 0 01-1-1V5z" stroke-width="2"/>
+                    </svg>
+                </button>
+                
+                <!-- AirPlay Button -->
+                <button onclick="startAirPlay()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="AirPlay">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M5 15l7-7 7 7M12 8v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+
+                <!-- Fire TV Connection Dialog -->
+                <div id="fireTVDialog" class="fixed inset-0 bg-black/50 hidden items-center justify-center">
+                    <div class="bg-white p-6 rounded-xl max-w-md w-11/12 space-y-4">
+                        <h3 class="text-xl font-bold">Cast to Fire TV</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 1: Screen Mirroring</h4>
+                                <ol class="text-sm space-y-2 text-gray-600">
+                                    <li>1. On your Fire TV, press and hold the <span class="font-medium">Home</span> button</li>
+                                    <li>2. Select <span class="font-medium">Mirroring</span></li>
+                                    <li>3. On your phone, enable screen mirroring and select your Fire TV</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 2: Fire TV Browser</h4>
+                                <ol class="text-sm space-y-2 text-gray-600">
+                                    <li>1. On your Fire TV, open <span class="font-medium">Firefox</span> or <span class="font-medium">Silk Browser</span></li>
+                                    <li>2. Enter this URL:</li>
+                                    <div class="bg-white p-2 rounded border text-sm font-mono break-all">
+                                        {{ local_url }}
+                                    </div>
+                                    <li>3. Enter room code: <span class="font-mono font-medium">{{ room_id }}</span></li>
+                                </ol>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 3: QR Code</h4>
+                                <p class="text-sm text-gray-600">Scan with Fire TV app on your phone:</p>
+                                <img src="{{ qr_code }}" alt="QR Code" class="w-32 h-32 mx-auto">
+                            </div>
+                        </div>
+                        
+                        <button onclick="document.getElementById('fireTVDialog').classList.add('hidden')"
+                                class="w-full bg-gray-100 py-2 rounded-lg hover:bg-gray-200 transition-all">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Smart TV Button -->
+                <button onclick="showTVQRCode()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Smart TV">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <rect x="2" y="7" width="20" height="15" rx="2" ry="2" stroke-width="2"/>
+                        <line x1="17" y1="2" x2="7" y2="2" stroke-width="2"/>
+                        <line x1="12" y1="2" x2="12" y2="7" stroke-width="2"/>
+                    </svg>
+                </button>
+
+                <!-- Fullscreen Button -->
+                <button onclick="toggleFullscreen()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Fullscreen">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" 
+                              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- TV Connection Modal -->
+            <div id="tvModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-xl max-w-md w-11/12">
+                    <h3 class="text-xl font-bold mb-4">Connect to Smart TV</h3>
+                    <div class="space-y-4">
+                        <div class="text-center">
+                            <img id="tvQRCode" class="mx-auto" alt="TV QR Code">
+                            <p class="text-sm text-gray-600 mt-2">Scan with your TV's mobile app</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="text-sm font-medium">Manual Connection:</p>
+                            <code class="text-xs block mt-1 text-gray-600 break-all" id="tvCode"></code>
+                        </div>
+                        <button onclick="document.getElementById('tvModal').classList.add('hidden')"
+                                class="w-full bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition-all">
+                            Close
+                        </button>
                     </div>
                 </div>
             </div>
@@ -171,6 +306,212 @@
         const roomId = "{{ room_id }}";
         let gameAudio = new Audio();
         let currentMusic = null;
+        let castSession = null;
+        let airplaySession = null;
+
+        // Initialize casting
+        window.onload = function() {
+            initializeCasting();
+            checkTVSupport();
+        };
+
+        function initializeCasting() {
+            // Initialize Chromecast
+            window['__onGCastApiAvailable'] = function(isAvailable) {
+                if (isAvailable) {
+                    initializeCastApi();
+                }
+            };
+
+            // Initialize AirPlay if available
+            if (window.WebKitPlaybackTargetAvailabilityEvent) {
+                document.addEventListener('webkitplaybacktargetavailabilitychanged', 
+                    function(event) {
+                        if (event.availability === 'available') {
+                            document.querySelector('[onclick="startAirPlay()"]')
+                                .classList.remove('hidden');
+                        }
+                    }
+                );
+            }
+        }
+
+        function initializeCastApi() {
+            const context = cast.framework.CastContext.getInstance();
+            context.setOptions({
+                receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+                autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+            });
+
+            // Listen for cast state changes
+            context.addEventListener(
+                cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+                function(event) {
+                    if (event.castState === cast.framework.CastState.CONNECTED) {
+                        castSession = context.getCurrentSession();
+                        onCastConnected();
+                    } else if (event.castState === cast.framework.CastState.DISCONNECTED) {
+                        castSession = null;
+                        onCastDisconnected();
+                    }
+                }
+            );
+        }
+
+        function startAirPlay() {
+            if (window.WebKitPlaybackTargetAvailabilityEvent) {
+                gameAudio.webkitShowPlaybackTargetPicker();
+                document.addEventListener(
+                    'webkitcurrentplaybacktargetiswirelesschanged',
+                    function(event) {
+                        airplaySession = event.target;
+                        if (event.target.webkitCurrentPlaybackTargetIsWireless) {
+                            onAirPlayConnected();
+                        } else {
+                            onAirPlayDisconnected();
+                        }
+                    }
+                );
+            }
+        }
+
+        function showFireTVDialog() {
+            const dialog = document.getElementById('fireTVDialog');
+            dialog.classList.remove('hidden');
+            dialog.classList.add('flex');
+            
+            // Initialize Fire TV detection
+            if (window.amazon && window.amazon.WebApp) {
+                window.amazon.WebApp.whenReady(function() {
+                    if (window.amazon.WebApp.isFireTV) {
+                        // We're already on Fire TV
+                        dialog.querySelector('.bg-gray-50').innerHTML = `
+                            <div class="text-center py-4">
+                                <p class="text-green-600 font-medium">You're already on Fire TV!</p>
+                                <p class="text-sm text-gray-600 mt-2">You can close this dialog and start playing.</p>
+                            </div>
+                        `;
+                    }
+                });
+            }
+        }
+
+        function showTVQRCode() {
+            const modal = document.getElementById('tvModal');
+            const qrCode = document.getElementById('tvQRCode');
+            const tvCode = document.getElementById('tvCode');
+            
+            // Generate unique TV code
+            const code = generateTVCode();
+            tvCode.textContent = code;
+            
+            // Generate QR code
+            const qrUrl = `https://party-games.hub/tv/${code}`;
+            qrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // Initialize Fire TV support
+        function initFireTVSupport() {
+            if (window.amazon && window.amazon.WebApp) {
+                window.amazon.WebApp.whenReady(function() {
+                    if (window.amazon.WebApp.isFireTV) {
+                        // We're on Fire TV, optimize the UI
+                        document.body.classList.add('tv-mode');
+                        
+                        // Handle Fire TV remote
+                        window.addEventListener('keydown', function(e) {
+                            switch(e.keyCode) {
+                                case 37: // Left
+                                    navigateButtons('prev');
+                                    break;
+                                case 39: // Right
+                                    navigateButtons('next');
+                                    break;
+                                case 13: // Enter/Select
+                                    document.activeElement.click();
+                                    break;
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            initFireTVSupport();
+        });
+
+        function generateTVCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function checkTVSupport() {
+            // Check for various TV platforms
+            const tvPlatforms = {
+                tizen: 'webapis' in window, // Samsung TV
+                webos: 'webOS' in window,   // LG TV
+                roku: 'Roku' in window,     // Roku
+                cast: 'chrome' in window && 'cast' in window.chrome
+            };
+
+            // Show relevant connection options
+            Object.entries(tvPlatforms).forEach(([platform, supported]) => {
+                const button = document.querySelector(`[data-platform="${platform}"]`);
+                if (button) {
+                    button.style.display = supported ? 'block' : 'none';
+                }
+            });
+        }
+
+        // Casting event handlers
+        function onCastConnected() {
+            console.log('Cast device connected');
+            document.body.classList.add('casting');
+            // Send initial game state
+            sendGameStateToCast();
+        }
+
+        function onCastDisconnected() {
+            console.log('Cast device disconnected');
+            document.body.classList.remove('casting');
+        }
+
+        function onAirPlayConnected() {
+            console.log('AirPlay device connected');
+            document.body.classList.add('casting');
+        }
+
+        function onAirPlayDisconnected() {
+            console.log('AirPlay device disconnected');
+            document.body.classList.remove('casting');
+        }
+
+        function sendGameStateToCast() {
+            if (castSession) {
+                const gameState = {
+                    room_id: roomId,
+                    players: getPlayerList(),
+                    current_game: getCurrentGame(),
+                    game_state: getGameState()
+                };
+                
+                const message = new cast.framework.messages.GenericMessage('urn:x-cast:com.partygames.game');
+                message.data = gameState;
+                castSession.sendMessage(message);
+            }
+        }
 
         // Audio management
         function playMusic(type) {
@@ -220,14 +561,115 @@
         });
 
         socket.on('player_joined', (data) => {
+            console.log('Player joined:', data);
             updatePlayerList(data.players);
             playSound('player_join');
+            showToast(`${data.player_name} joined the game!`, 'success');
+            updateGameControls(data.players.length);
         });
 
         socket.on('player_left', (data) => {
+            console.log('Player left:', data);
             updatePlayerList(data.players);
             playSound('player_leave');
+            showToast(`${data.disconnected_player} left the game`, 'warning');
+            updateGameControls(data.players.length);
         });
+
+        function updatePlayerList(players) {
+            const playerGrid = document.getElementById('playerGrid');
+            const emptyState = document.getElementById('emptyState');
+            const playerCount = document.getElementById('playerCount');
+            const minPlayersStatus = document.getElementById('minPlayersStatus');
+            
+            // Update player count
+            playerCount.textContent = players.length;
+            
+            // Update min players status
+            if (players.length < 2) {
+                minPlayersStatus.textContent = 'Need 2+ players to start';
+                minPlayersStatus.className = 'text-sm text-red-500';
+            } else {
+                minPlayersStatus.textContent = 'Ready to start!';
+                minPlayersStatus.className = 'text-sm text-green-500';
+            }
+            
+            // Show/hide empty state
+            emptyState.style.display = players.length === 0 ? 'block' : 'none';
+            
+            // Clear and rebuild player grid
+            playerGrid.innerHTML = '';
+            players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-3 player-join';
+                
+                // Profile picture
+                const profileContainer = document.createElement('div');
+                profileContainer.className = 'w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0';
+                if (player.profile_picture) {
+                    const img = document.createElement('img');
+                    img.src = player.profile_picture;
+                    img.className = 'w-full h-full object-cover';
+                    profileContainer.appendChild(img);
+                } else {
+                    // Default avatar with first letter
+                    const defaultAvatar = document.createElement('div');
+                    defaultAvatar.className = 'w-full h-full flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold text-lg';
+                    defaultAvatar.textContent = player.name[0].toUpperCase();
+                    profileContainer.appendChild(defaultAvatar);
+                }
+                
+                // Player info
+                const info = document.createElement('div');
+                info.className = 'flex-1 min-w-0';
+                info.innerHTML = `
+                    <p class="text-sm font-medium text-gray-900 truncate">${player.name}</p>
+                    <p class="text-xs text-gray-500">${player.is_host ? 'Host' : 'Player'}</p>
+                `;
+                
+                playerCard.appendChild(profileContainer);
+                playerCard.appendChild(info);
+                playerGrid.appendChild(playerCard);
+            });
+        }
+
+        function updateGameControls(playerCount) {
+            const gameButtons = document.querySelectorAll('.game-btn');
+            const canStart = playerCount >= 2;
+            
+            gameButtons.forEach(btn => {
+                btn.disabled = !canStart;
+                if (!canStart) {
+                    btn.setAttribute('title', 'Need at least 2 players to start');
+                } else {
+                    btn.removeAttribute('title');
+                }
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg text-white text-sm z-50 transition-all duration-300 ${
+                type === 'success' ? 'bg-green-500' :
+                type === 'warning' ? 'bg-yellow-500' :
+                type === 'error' ? 'bg-red-500' :
+                'bg-black/80'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.style.transform = 'translate(-50%, 0)';
+                toast.style.opacity = '1';
+            });
+            
+            // Remove after delay
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
         socket.on('game_started', (data) => {
             if (data.game_type === 'chase') {
