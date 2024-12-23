@@ -54,5 +54,5 @@ def get_db():
     finally:
         db.close()
 
-# Create tables
-init_db()
+# Initialize database on import
+Base.metadata.create_all(bind=engine)

@@ -13,10 +13,16 @@ from server.models.game_room import GameRoom
 # Global state
 rooms: Dict[str, GameRoom] = {}
 
-def create_app() -> socketio.ASGIApp:
+def create_app():
     """Create and configure the application."""
-    from server.database import init_db
-    init_db()  # Initialize database
+    # Import here to avoid circular imports
+    from server.database import init_db, Base, engine
+    from server.routes import register_routes
+    from server.sockets import register_socket_events
+
+    # Initialize database
+    Base.metadata.create_all(bind=engine)
+    init_db()
     # Create FastAPI app
     app = FastAPI(
         title="Party Games Hub",
@@ -118,12 +124,18 @@ def create_app() -> socketio.ASGIApp:
                 "show_refresh": True
             })
 
-    # Import and register routes and socket events
-    from server.routes import register_routes
-    from server.sockets import register_socket_events
-
+    # Register routes and socket events
     register_routes(app, templates, rooms)
     register_socket_events(sio, rooms)
+
+    # Add startup and shutdown handlers
+    @app.on_event("startup")
+    async def startup_event():
+        print("Socket.IO server started")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        print("Socket.IO server shutting down")
 
     # Create background task for room cleanup
     async def cleanup_rooms(sid, environ):
@@ -139,13 +151,11 @@ def create_app() -> socketio.ASGIApp:
     
     sio.on('connect', cleanup_rooms)
 
-    # Create Socket.IO app with enhanced error handling
+    # Mount Socket.IO app
     socket_app = socketio.ASGIApp(
         socketio_server=sio,
         other_asgi_app=app,
-        socketio_path='socket.io',
-        on_startup=[lambda: print("Socket.IO server started")],
-        on_shutdown=[lambda: print("Socket.IO server shutting down")]
+        socketio_path='socket.io'
     )
 
     # Add startup and shutdown handlers
