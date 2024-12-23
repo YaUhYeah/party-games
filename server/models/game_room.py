@@ -1,8 +1,10 @@
 """Game room model with enhanced features for better user experience."""
 import random
 import time
+import io
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
+from PIL import Image, ImageDraw, ImageFont
 
 from server.config.game_config import GAME_CONFIG, GAME_TOPICS, MUSIC_CONFIG
 from server.config.questions import TRIVIA_QUESTIONS, CHASE_QUESTIONS

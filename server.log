@@ -1,0 +1,42 @@
+INFO:     Will watch for changes in these directories: ['/workspace/party-games']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [441] using WatchFiles
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        player_left.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        player_left.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+    profiles/
+INFO:     Started server process [443]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

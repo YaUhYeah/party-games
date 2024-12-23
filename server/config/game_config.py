@@ -1,7 +1,18 @@
 """Game configuration module."""
+from typing import Dict, Any, List
 
 # Game configuration
 GAME_CONFIG = {
+    'chase_categories': [
+        'general_knowledge',
+        'science',
+        'history',
+        'geography',
+        'entertainment',
+        'sports',
+        'literature',
+        'technology'
+    ],
     'min_players': 2,  # Reduced minimum players
     'max_players': 12,
     'time_limits': {

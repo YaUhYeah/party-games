@@ -1,4 +1,5 @@
 """Question bank for trivia and chase games."""
+from typing import Dict, List, Any
 
 # Trivia questions
 TRIVIA_QUESTIONS = [

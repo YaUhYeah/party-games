@@ -1,6 +1,6 @@
 """Application factory module."""
 import os
-from typing import Dict
+from typing import Dict, Any
 
 import socketio
 from fastapi import FastAPI
