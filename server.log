@@ -260,36 +260,11 @@ static/
 INFO:     Started server process [483]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-     wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-INFO:     Started server process [475]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
+WARNING:  WatchFiles detected changes in 'server/config/game_config.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [475]
+INFO:     Finished server process [483]
 Server initialized for asgi.
 
 Static directory structure:
@@ -305,6 +280,31 @@ static/
         lobby.mp3
         drawing.mp3
         wrong.mp3
+        tick.mp3
+        correct.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        player_left.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+    profiles/
+INFO:     Started server process [498]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+   wrong.mp3
         tick.mp3
         correct.mp3
     profiles/
@@ -371,5 +371,49 @@ static/
         correct.mp3
     profiles/
 INFO:     Started server process [482]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server/config/game_config.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [482]
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        player_left.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        player_left.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+    profiles/
+INFO:     Started server process [497]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.

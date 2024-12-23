@@ -218,8 +218,52 @@
             </div>
 
             <!-- Game Area -->
-            <div id="gameArea" class="hidden">
-                <!-- Game content will be dynamically added here -->
+            <div id="gameArea" class="hidden p-4">
+                <!-- Welcome Screen -->
+                <div id="welcomeScreen" class="text-center py-8">
+                    <h2 class="text-3xl font-bold text-indigo-600 mb-4">Welcome to Party Games!</h2>
+                    <p class="text-gray-600 mb-8">Waiting for the host to start a game...</p>
+                    <div class="flex flex-col items-center space-y-4">
+                        <div class="bg-gray-100 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-700 mb-2">Players in Room</h3>
+                            <div id="playerList" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Screens -->
+                <div id="triviaScreen" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <div id="questionText" class="text-xl font-semibold mb-6"></div>
+                            <div id="answerOptions" class="space-y-4"></div>
+                            <div id="timer" class="mt-4 text-center"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chaseScreen" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <div id="chaseInfo" class="text-center mb-4"></div>
+                            <div id="chaseBoard" class="mb-6"></div>
+                            <div id="chaseQuestion" class="text-xl font-semibold mb-6"></div>
+                            <div id="chaseOptions" class="space-y-4"></div>
+                            <div id="chaseTimer" class="mt-4 text-center"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="drawingScreen" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <div id="drawingPrompt" class="text-center mb-4"></div>
+                            <canvas id="drawingCanvas" class="drawing-canvas border-2 border-gray-200 rounded-lg mb-4"></canvas>
+                            <div id="drawingTools" class="flex justify-center space-x-4"></div>
+                            <div id="drawingTimer" class="mt-4 text-center"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

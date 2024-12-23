@@ -120,6 +120,13 @@ MUSIC_CONFIG = {
         'fade_in': 1,
         'fade_out': 1
     },
+    'chase': {
+        'file': 'static/music/trivia.mp3',  # Using trivia music for chase game
+        'volume': 0.4,
+        'loop': True,
+        'fade_in': 1,
+        'fade_out': 1
+    },
     'correct_answer': {
         'file': 'static/music/correct.mp3',
         'volume': 0.6,
