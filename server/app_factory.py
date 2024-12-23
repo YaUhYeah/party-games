@@ -32,6 +32,11 @@ def create_app():
         redoc_url=None  # Disable redoc in production
     )
 
+    # Initialize templates early for exception handler
+    SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+    TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
         print(f"Global exception handler caught: {exc}")
@@ -74,10 +79,8 @@ def create_app():
         json=True  # Enable JSON serialization
     )
 
-    # Set up static files and templates
-    SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+    # Set up static files
     STATIC_DIR = os.path.join(SERVER_DIR, "static")
-    TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
 
     # Create necessary directories with proper permissions
     def ensure_dir(path):
@@ -92,7 +95,6 @@ def create_app():
 
     # Mount static files
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
     # Print static directory structure for debugging
     print("\nStatic directory structure:")
@@ -127,15 +129,6 @@ def create_app():
     # Register routes and socket events
     register_routes(app, templates, rooms)
     register_socket_events(sio, rooms)
-
-    # Add startup and shutdown handlers
-    @app.on_event("startup")
-    async def startup_event():
-        print("Socket.IO server started")
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        print("Socket.IO server shutting down")
 
     # Create background task for room cleanup
     async def cleanup_rooms(sid, environ):

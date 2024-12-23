@@ -30,11 +30,13 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             # Validate room exists
             if room_id not in rooms:
                 print(f"Warning: Room {room_id} not found")
-                # We'll let the client connect but inform them about the room status
                 await sio.emit('room_status', {
                     'exists': False,
                     'message': 'Room not found or expired'
                 }, room=sid)
+                # Disconnect the client if room doesn't exist
+                await sio.disconnect(sid)
+                return False
 
     @sio.event
     async def join_room(sid, data):
@@ -83,6 +85,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     await sio.emit('join_error', {
                         'message': 'Username already taken'
                     }, room=sid)
+                    await sio.disconnect(sid)
                     return
 
             # Check if it's a rejoin case
@@ -95,8 +98,11 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             if existing_sid:
                 # Remove old connection
                 if existing_sid in room.players:
-                    del room.players[existing_sid]
-                    await sio.leave_room(existing_sid, room_id)
+                    try:
+                        await sio.leave_room(existing_sid, room_id)
+                        del room.players[existing_sid]
+                    except Exception as e:
+                        print(f"Error removing old connection: {e}")
 
             # Check if username exists or create new user
             user = room.db.query(User).filter(User.username == player_name).first()
@@ -115,17 +121,25 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
             room.db.refresh(user)
 
-            # Store user info in room
-            room.players[sid] = {
-                'name': player_name,
-                'user_id': user.id,
-                'profile': profile_picture or '',
-                'score': 0,
-                'connected': True,
-                'is_host': False
-            }
+            try:
+                # Store user info in room
+                room.players[sid] = {
+                    'name': player_name,
+                    'user_id': user.id,
+                    'profile': profile_picture or '',
+                    'score': 0,
+                    'connected': True,
+                    'is_host': False
+                }
 
-            await sio.enter_room(sid, room_id)
+                await sio.enter_room(sid, room_id)
+            except Exception as e:
+                print(f"Error storing user info or joining room: {e}")
+                await sio.emit('join_error', {
+                    'message': 'Failed to join room. Please try again.'
+                }, room=sid)
+                await sio.disconnect(sid)
+                return
 
             # Send current game state to rejoining player
             if room.game_state != 'waiting':
