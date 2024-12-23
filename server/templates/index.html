@@ -28,14 +28,14 @@
         </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <a href="/host" class="game-card p-6 shadow-lg">
+            <a href="/host" class="game-card p-6 shadow-lg block no-underline">
                 <h2 class="text-2xl font-bold mb-4 text-indigo-600">Host a Game</h2>
                 <p class="text-gray-600">Create a new game room and invite your friends to join!</p>
-            </div>
+            </a>
             
             <div class="game-card p-6 shadow-lg">
                 <h2 class="text-2xl font-bold mb-4 text-indigo-600">Join a Game</h2>
-                <form action="/join" method="GET" class="space-y-4">
+                <form id="joinForm" class="space-y-4">
                     <input type="text" name="room_id" placeholder="Enter Room Code" 
                            class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-400">
                     <button type="submit" 
@@ -46,5 +46,14 @@
             </div>
         </div>
     </div>
+    <script>
+        document.getElementById('joinForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const roomId = this.querySelector('input[name="room_id"]').value;
+            if (roomId) {
+                window.location.href = `/join/${roomId}`;
+            }
+        });
+    </script>
 </body>
 </html>

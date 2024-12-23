@@ -99,7 +99,15 @@ def create_app() -> socketio.ASGIApp:
             print(f"{subindent}{f}")
 
     # Add static files to templates context
-    templates.env.globals["static_url"] = "/static"
+    templates.env.globals.update({
+        "static_url": "/static",
+        "request": None  # Will be overridden in route handlers
+    })
+
+    # Add root route
+    @app.get("/")
+    async def root(request: Request):
+        return templates.TemplateResponse("index.html", {"request": request})
 
     # Import and register routes and socket events
     from server.routes import register_routes
@@ -126,7 +134,8 @@ def create_app() -> socketio.ASGIApp:
     socket_app = socketio.ASGIApp(
         sio,
         app,
-        socketio_path='socket.io'
+        socketio_path='socket.io',
+        other_asgi_app=app
     )
 
     # Add startup and shutdown handlers
