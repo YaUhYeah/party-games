@@ -1,7 +1,18 @@
 """Game configuration module."""
+from typing import Dict, Any, List
 
 # Game configuration
 GAME_CONFIG = {
+    'chase_categories': [
+        'general_knowledge',
+        'science',
+        'history',
+        'geography',
+        'entertainment',
+        'sports',
+        'literature',
+        'technology'
+    ],
     'min_players': 2,  # Reduced minimum players
     'max_players': 12,
     'time_limits': {
@@ -104,6 +115,13 @@ MUSIC_CONFIG = {
     },
     'trivia': {
         'file': 'static/music/trivia.mp3',
+        'volume': 0.4,
+        'loop': True,
+        'fade_in': 1,
+        'fade_out': 1
+    },
+    'chase': {
+        'file': 'static/music/trivia.mp3',  # Using trivia music for chase game
         'volume': 0.4,
         'loop': True,
         'fade_in': 1,

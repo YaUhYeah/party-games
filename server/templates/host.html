@@ -88,23 +88,79 @@
                 <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="text-center">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Join Info -->
+                <div class="text-center lg:col-span-1">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
                     <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4">
                     <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
                 </div>
 
-                <div>
+                <!-- Middle Column: Game Display -->
+                <div class="lg:col-span-1">
+                    <div id="gameDisplay" class="bg-gray-900 rounded-xl p-6 text-white min-h-[400px] relative overflow-hidden">
+                        <!-- Waiting State -->
+                        <div id="waitingState" class="text-center py-12">
+                            <h3 class="text-2xl font-bold mb-4">Waiting to Start</h3>
+                            <p class="text-gray-400">Select a game mode when ready</p>
+                        </div>
+
+                        <!-- Chase Game State -->
+                        <div id="chaseState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">The Chase</h3>
+                                <p id="chaseStatus" class="text-gray-400"></p>
+                            </div>
+                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
+                                <!-- Chase board positions will be added here -->
+                            </div>
+                            <div id="chaseQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
+                                <p class="text-lg font-medium"></p>
+                            </div>
+                            <div id="chaseTimer" class="text-xl font-bold text-center"></div>
+                        </div>
+
+                        <!-- Trivia Game State -->
+                        <div id="triviaState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">Trivia Time</h3>
+                                <p id="triviaRound" class="text-gray-400"></p>
+                            </div>
+                            <div id="triviaQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
+                                <p class="text-lg font-medium"></p>
+                            </div>
+                            <div id="triviaAnswers" class="grid grid-cols-2 gap-4">
+                                <!-- Answer stats will be shown here -->
+                            </div>
+                            <div id="triviaTimer" class="text-xl font-bold text-center mt-4"></div>
+                        </div>
+
+                        <!-- Drawing Game State -->
+                        <div id="drawingState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">Chinese Whispers</h3>
+                                <p id="drawingTurn" class="text-gray-400"></p>
+                            </div>
+                            <div id="drawingDisplay" class="bg-white rounded-lg aspect-video mb-4">
+                                <!-- Drawing will be shown here -->
+                            </div>
+                            <div id="drawingWord" class="text-center text-xl font-bold"></div>
+                            <div id="drawingTimer" class="text-xl font-bold text-center mt-4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Players -->
+                <div class="lg:col-span-1">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
-                    <div id="playerList" class="player-list p-4 min-h-[200px] space-y-3">
+                    <div id="playerList" class="player-list p-4 min-h-[400px] space-y-3">
                         <div class="flex items-center justify-between">
                             <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
                             <div class="text-sm text-gray-500" id="minPlayersStatus">
                                 Need 2+ players to start
                             </div>
                         </div>
-                        <div id="playerGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div id="playerGrid" class="grid grid-cols-1 gap-3">
                             <!-- Players will be added here dynamically -->
                         </div>
                         <div id="emptyState" class="text-center py-8">
@@ -272,31 +328,216 @@
             </div>
 
             <script>
-                // Disable buttons while game is starting
+                // Game state management
+                const gameState = {
+                    currentGame: null,
+                    round: 0,
+                    totalRounds: 3,
+                    timeLeft: 0,
+                    timer: null,
+                    scores: {},
+
+                    // Initialize game state
+                    init() {
+                        this.socket = io({
+                            query: { room_id: "{{ room_id }}", is_host: true },
+                            transports: ['websocket'],
+                            upgrade: false
+                        });
+
+                        this.setupSocketEvents();
+                        this.setupGameTimers();
+                    },
+
+                    // Set up socket event handlers
+                    setupSocketEvents() {
+                        this.socket.on('game_started', (data) => {
+                            console.log('Game started:', data);
+                            this.currentGame = data.game_type;
+                            this.round = data.round;
+                            this.totalRounds = data.total_rounds;
+
+                            // Hide all game states
+                            document.getElementById('waitingState').classList.add('hidden');
+                            document.getElementById('chaseState').classList.add('hidden');
+                            document.getElementById('triviaState').classList.add('hidden');
+                            document.getElementById('drawingState').classList.add('hidden');
+
+                            // Show appropriate game state
+                            if (data.game_type === 'chase') {
+                                document.getElementById('chaseState').classList.remove('hidden');
+                                document.getElementById('chaseStatus').textContent = `Category: ${data.chase_category}`;
+                                this.setupChaseBoard(data.board_size);
+                                this.startTimer(data.time_limit);
+                            } else if (data.game_type === 'trivia') {
+                                document.getElementById('triviaState').classList.remove('hidden');
+                                document.getElementById('triviaRound').textContent = `Round ${data.round} of ${data.total_rounds}`;
+                                document.getElementById('triviaQuestion').querySelector('p').textContent = data.question.question;
+                                this.setupTriviaAnswers(data.question.options);
+                                this.startTimer(data.time_limit);
+                            } else if (data.game_type === 'chinese_whispers') {
+                                document.getElementById('drawingState').classList.remove('hidden');
+                                document.getElementById('drawingWord').textContent = `Word: ${data.word}`;
+                                this.startTimer(data.time_limit);
+                            }
+                        });
+
+                        this.socket.on('answer_submitted', (data) => {
+                            if (this.currentGame === 'trivia') {
+                                this.updateTriviaAnswers(data);
+                            } else if (this.currentGame === 'chase') {
+                                this.updateChaseAnswers(data);
+                            }
+                        });
+
+                        this.socket.on('round_complete', (data) => {
+                            this.stopTimer();
+                            this.updateScores(data.scores);
+                            if (data.next_round) {
+                                setTimeout(() => this.startNextRound(data), 3000);
+                            }
+                        });
+
+                        this.socket.on('game_complete', (data) => {
+                            this.stopTimer();
+                            this.showGameResults(data);
+                        });
+                    },
+
+                    // Timer management
+                    startTimer(seconds) {
+                        this.stopTimer();
+                        this.timeLeft = seconds;
+                        this.updateTimerDisplay();
+                        this.timer = setInterval(() => {
+                            this.timeLeft--;
+                            this.updateTimerDisplay();
+                            if (this.timeLeft <= 0) {
+                                this.stopTimer();
+                            }
+                        }, 1000);
+                    },
+
+                    stopTimer() {
+                        if (this.timer) {
+                            clearInterval(this.timer);
+                            this.timer = null;
+                        }
+                    },
+
+                    updateTimerDisplay() {
+                        const timerElement = document.getElementById(`${this.currentGame}Timer`);
+                        if (timerElement) {
+                            timerElement.textContent = this.timeLeft;
+                        }
+                    },
+
+                    // Game-specific setup
+                    setupChaseBoard(size) {
+                        const board = document.getElementById('chaseBoard');
+                        board.innerHTML = '';
+                        for (let i = 0; i < size; i++) {
+                            const position = document.createElement('div');
+                            position.className = 'bg-gray-800 rounded-lg p-4 text-center';
+                            position.textContent = i + 1;
+                            board.appendChild(position);
+                        }
+                    },
+
+                    setupTriviaAnswers(options) {
+                        const answers = document.getElementById('triviaAnswers');
+                        answers.innerHTML = '';
+                        options.forEach((option, index) => {
+                            const answerBox = document.createElement('div');
+                            answerBox.className = 'bg-gray-800 rounded-lg p-4';
+                            answerBox.innerHTML = `
+                                <div class="font-medium">${option}</div>
+                                <div class="text-sm text-gray-400">Answers: <span id="answer${index}Count">0</span></div>
+                            `;
+                            answers.appendChild(answerBox);
+                        });
+                    },
+
+                    updateTriviaAnswers(data) {
+                        const { option, count } = data;
+                        const countElement = document.getElementById(`answer${option}Count`);
+                        if (countElement) {
+                            countElement.textContent = count;
+                        }
+                    },
+
+                    updateChaseAnswers(data) {
+                        const { player, correct } = data;
+                        const answers = document.getElementById('chaseAnswers');
+                        const answerBox = document.createElement('div');
+                        answerBox.className = `rounded-lg p-4 ${correct ? 'bg-green-800' : 'bg-red-800'}`;
+                        answerBox.textContent = `${player}: ${correct ? 'Correct!' : 'Wrong!'}`;
+                        answers.appendChild(answerBox);
+                    },
+
+                    updateScores(scores) {
+                        this.scores = scores;
+                        // Update score display
+                        const scoreElements = document.querySelectorAll('.player-score');
+                        scoreElements.forEach(element => {
+                            const playerId = element.dataset.playerId;
+                            if (playerId in scores) {
+                                element.textContent = scores[playerId];
+                            }
+                        });
+                    },
+
+                    showGameResults(data) {
+                        const winner = data.winner;
+                        const scores = data.final_scores;
+                        // Show game results overlay
+                        // TODO: Implement results display
+                    }
+                };
+
+                // Start game function
                 function startGame(type) {
                     const buttons = document.querySelectorAll('.game-btn');
-                    buttons.forEach(btn => btn.disabled = true);
-                    
-                    // Add loading state to clicked button
-                    const clickedBtn = event.currentTarget;
-                    const originalContent = clickedBtn.innerHTML;
-                    clickedBtn.innerHTML = `
-                        <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Starting Game...
+                    buttons.forEach(btn => {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+
+                    // Show loading state
+                    const loadingOverlay = document.createElement('div');
+                    loadingOverlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+                    loadingOverlay.innerHTML = `
+                        <div class="bg-white rounded-xl p-8 text-center">
+                            <div class="animate-spin w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <p class="text-gray-600">Starting ${type} game...</p>
+                        </div>
                     `;
+                    document.body.appendChild(loadingOverlay);
+
+                    // Initialize game state
+                    gameState.currentGame = type;
+                    gameState.round = 1;
                     
-                    // Call the original startGame function
-                    socket.emit('start_game', { room_id: roomId, game_type: type });
-                    
-                    // Reset buttons after a delay (in case of error)
+                    // Emit start game event
+                    gameState.socket.emit('start_game', {
+                        room_id: "{{ room_id }}",
+                        game_type: type
+                    });
+
+                    // Set up timeout to remove loading state if no response
                     setTimeout(() => {
-                        buttons.forEach(btn => btn.disabled = false);
-                        clickedBtn.innerHTML = originalContent;
-                    }, 5000);
+                        loadingOverlay.remove();
+                        buttons.forEach(btn => {
+                            btn.disabled = false;
+                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        });
+                    }, 10000); // 10 second timeout
                 }
+
+                // Initialize game state when page loads
+                document.addEventListener('DOMContentLoaded', () => {
+                    gameState.init();
+                });
             </script>
         </div>
     </div>

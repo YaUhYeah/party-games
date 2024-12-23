@@ -219,7 +219,135 @@
 
             <!-- Game Area -->
             <div id="gameArea" class="hidden">
-                <!-- Game content will be dynamically added here -->
+                <!-- Welcome Screen -->
+                <div id="welcomeScreen" class="text-center py-8">
+                    <h2 class="text-3xl font-bold text-indigo-600 mb-4">Welcome to Party Games!</h2>
+                    <p class="text-gray-600 mb-8">Waiting for the host to start a game...</p>
+                    <div class="flex flex-col items-center space-y-4">
+                        <div class="bg-gray-100 p-4 rounded-lg">
+                            <h3 class="font-semibold text-gray-700 mb-2">Players in Room</h3>
+                            <div id="playerList" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Screens -->
+                <div id="triviaScreen" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <div id="questionText" class="text-xl font-semibold mb-6"></div>
+                            <div id="answerOptions" class="grid grid-cols-1 gap-4">
+                                <!-- Answer buttons will be added here -->
+                            </div>
+                            <div id="timer" class="mt-4 text-center text-2xl font-bold"></div>
+                            <div id="triviaFeedback" class="mt-4 text-center hidden">
+                                <div class="correct-feedback text-green-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Correct!</p>
+                                </div>
+                                <div class="wrong-feedback text-red-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Wrong!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="chaseScreen" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <div id="chaseInfo" class="text-center mb-4">
+                                <div id="chaseRole" class="text-xl font-bold mb-2"></div>
+                                <div id="chaseStatus" class="text-gray-600"></div>
+                            </div>
+                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
+                                <!-- Board positions will be added here -->
+                            </div>
+                            <div id="chaseQuestion" class="text-xl font-semibold mb-6"></div>
+                            <div id="chaseOptions" class="grid grid-cols-1 gap-4">
+                                <!-- Answer buttons will be added here -->
+                            </div>
+                            <div id="chaseTimer" class="mt-4 text-center text-2xl font-bold"></div>
+                            <div id="chaseFeedback" class="mt-4 text-center hidden">
+                                <div class="catch-feedback text-red-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Caught!</p>
+                                </div>
+                                <div class="escape-feedback text-green-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Escaped!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="drawingScreen" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <div id="drawingPrompt" class="text-center mb-4">
+                                <div id="drawingWord" class="text-2xl font-bold mb-2"></div>
+                                <div id="drawingTurn" class="text-gray-600"></div>
+                            </div>
+                            <canvas id="drawingCanvas" class="drawing-canvas border-2 border-gray-200 rounded-lg mb-4"></canvas>
+                            <div id="drawingTools" class="grid grid-cols-4 gap-4 mb-4">
+                                <div class="col-span-3 grid grid-cols-3 gap-2">
+                                    <!-- Color buttons -->
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #000000" data-color="#000000"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #FF0000" data-color="#FF0000"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #00FF00" data-color="#00FF00"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #0000FF" data-color="#0000FF"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #FFFF00" data-color="#FFFF00"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #FF00FF" data-color="#FF00FF"></button>
+                                </div>
+                                <div class="tool-buttons grid grid-cols-1 gap-2">
+                                    <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300" data-tool="brush">
+                                        <i class="fas fa-paint-brush"></i>
+                                    </button>
+                                    <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300" data-tool="eraser">
+                                        <i class="fas fa-eraser"></i>
+                                    </button>
+                                    <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300" onclick="clearCanvas()">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="brush-size flex items-center space-x-2">
+                                    <input type="range" id="brushSize" min="1" max="20" value="4" class="w-32">
+                                    <span id="brushSizeValue" class="text-sm">4px</span>
+                                </div>
+                                <div id="drawingTimer" class="text-2xl font-bold"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Feedback -->
+                <div id="gameFeedback" class="fixed inset-0 bg-black/80 hidden items-center justify-center">
+                    <div class="bg-white rounded-xl p-8 max-w-md w-11/12 text-center">
+                        <div id="feedbackIcon" class="mb-4">
+                            <!-- Icon will be added here -->
+                        </div>
+                        <h3 id="feedbackTitle" class="text-2xl font-bold mb-2"></h3>
+                        <p id="feedbackMessage" class="text-gray-600 mb-4"></p>
+                        <div id="feedbackStats" class="grid grid-cols-2 gap-4 mb-6">
+                            <!-- Stats will be added here -->
+                        </div>
+                        <button id="feedbackButton" class="bg-indigo-600 text-white px-6 py-3 rounded-lg w-full">
+                            Continue
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -231,11 +359,102 @@
             roomId: "{{ room_id }}",
             hasJoined: false,
             debugVisible: false,
+            currentGame: null,
+            isDrawer: false,
+            isChaser: false,
             debugState: {
                 socketConnected: false,
                 lastError: null,
                 joinAttempts: 0,
                 events: []
+            },
+
+            // Initialize socket connection
+            initSocket() {
+                console.log('Initializing socket connection...');
+                this.socket = io({
+                    query: { room_id: this.roomId },
+                    transports: ['websocket'],
+                    upgrade: false,
+                    reconnection: true,
+                    reconnectionAttempts: 5
+                });
+
+                // Socket connection events
+                this.socket.on('connect', () => {
+                    console.log('Socket connected:', this.socket.id);
+                    this.debugState.socketConnected = true;
+                    this.updateDebugInfo();
+                    this.showStatus('Connected to server', 'success');
+                });
+
+                this.socket.on('disconnect', () => {
+                    console.log('Socket disconnected');
+                    this.debugState.socketConnected = false;
+                    this.updateDebugInfo();
+                    this.showStatus('Disconnected from server', 'error');
+                });
+
+                this.socket.on('connect_error', (error) => {
+                    console.error('Socket connection error:', error);
+                    this.debugState.lastError = error.message;
+                    this.updateDebugInfo();
+                    this.showStatus('Connection error: ' + error.message, 'error');
+                });
+
+                // Game events
+                this.socket.on('join_confirmed', (data) => {
+                    console.log('Join confirmed:', data);
+                    document.getElementById('nameInput').classList.add('hidden');
+                    document.getElementById('gameArea').classList.remove('hidden');
+                    document.getElementById('welcomeScreen').classList.remove('hidden');
+                    this.hasJoined = true;
+                    this.updatePlayerList(data.current_players);
+                });
+
+                this.socket.on('join_error', (data) => {
+                    console.error('Join error:', data);
+                    this.showStatus(data.message, 'error');
+                    const joinButton = document.getElementById('joinButton');
+                    const joinText = joinButton.querySelector('.join-text');
+                    const loadingSpinner = joinButton.querySelector('.loading-spinner');
+                    joinButton.disabled = false;
+                    joinText.classList.remove('hidden');
+                    loadingSpinner.classList.add('hidden');
+                });
+
+                this.socket.on('player_joined', (data) => {
+                    console.log('Player joined:', data);
+                    this.updatePlayerList(data.players);
+                    if (data.new_player) {
+                        this.showStatus(`${data.new_player} joined the game`, 'info');
+                    }
+                });
+
+                this.socket.on('player_left', (data) => {
+                    console.log('Player left:', data);
+                    this.updatePlayerList(data.players);
+                    if (data.disconnected_player) {
+                        this.showStatus(`${data.disconnected_player} left the game`, 'info');
+                    }
+                });
+            },
+
+            // Update player list
+            updatePlayerList(players) {
+                const playerList = document.getElementById('playerList');
+                if (!playerList) return;
+
+                playerList.innerHTML = '';
+                players.forEach(player => {
+                    const playerDiv = document.createElement('div');
+                    playerDiv.className = 'flex items-center justify-between p-2 bg-white rounded-lg shadow-sm';
+                    playerDiv.innerHTML = `
+                        <span class="font-medium">${player.name}</span>
+                        <span class="text-gray-500">Score: ${player.score}</span>
+                    `;
+                    playerList.appendChild(playerDiv);
+                });
             },
 
             // Initialize the game
@@ -258,6 +477,193 @@
                 
                 // Load saved profile if exists
                 this.loadSavedProfile();
+            },
+
+            // Join the game
+            async joinGame() {
+                const playerName = document.getElementById('playerName').value.trim();
+                if (!playerName) {
+                    this.showStatus('Please enter your name', 'error');
+                    return;
+                }
+
+                // Get profile picture from canvas
+                const canvas = document.getElementById('profileCanvas');
+                const profilePicture = canvas.toDataURL('image/png');
+
+                // Show loading state
+                const joinButton = document.getElementById('joinButton');
+                const joinText = joinButton.querySelector('.join-text');
+                const loadingSpinner = joinButton.querySelector('.loading-spinner');
+                joinButton.disabled = true;
+                joinText.classList.add('hidden');
+                loadingSpinner.classList.remove('hidden');
+
+                try {
+                    // Emit join event
+                    await this.socket.emit('join_room', {
+                        room_id: this.roomId,
+                        player_name: playerName,
+                        profile_picture: profilePicture
+                    });
+                } catch (error) {
+                    console.error('Join error:', error);
+                    this.showStatus(error.message || 'Failed to join game', 'error');
+                    joinButton.disabled = false;
+                    joinText.classList.remove('hidden');
+                    loadingSpinner.classList.add('hidden');
+                }
+            },
+
+            // Add keyboard listeners
+            addKeyboardListeners() {
+                document.addEventListener('keydown', (e) => {
+                    // Ctrl+Shift+D to toggle debug overlay
+                    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                        this.toggleDebug();
+                    }
+                });
+            },
+
+            // Toggle debug overlay
+            toggleDebug() {
+                const debugOverlay = document.getElementById('debugOverlay');
+                this.debugVisible = !this.debugVisible;
+                debugOverlay.classList.toggle('hidden', !this.debugVisible);
+            },
+
+            // Update debug info
+            updateDebugInfo() {
+                if (!this.debugVisible) return;
+                const debugInfo = document.getElementById('debugInfo');
+                if (!debugInfo) return;
+
+                const info = {
+                    roomId: this.roomId,
+                    socketId: this.socket?.id,
+                    connected: this.debugState.socketConnected,
+                    lastError: this.debugState.lastError,
+                    joinAttempts: this.debugState.joinAttempts,
+                    hasJoined: this.hasJoined,
+                    currentGame: this.currentGame,
+                    events: this.debugState.events.slice(-5)
+                };
+
+                debugInfo.textContent = JSON.stringify(info, null, 2);
+            },
+
+            // Initialize game screens and event handlers
+            initGameScreens() {
+                if (!this.socket) {
+                    console.error('Socket not initialized');
+                    return;
+                }
+
+                // Socket event handlers for games
+                this.socket.on('game_started', (data) => {
+                    console.log('Game started:', data);
+                    this.currentGame = data.game_type;
+                    
+                    // Hide welcome screen and show game screen
+                    document.getElementById('welcomeScreen').classList.add('hidden');
+                    document.getElementById('gameArea').classList.remove('hidden');
+                    
+                    // Show appropriate game screen
+                    if (data.game_type === 'trivia') {
+                        document.getElementById('triviaScreen').classList.remove('hidden');
+                        document.getElementById('questionText').textContent = data.question.question;
+                        const options = document.getElementById('answerOptions');
+                        options.innerHTML = '';
+                        data.question.options.forEach(option => {
+                            const button = document.createElement('button');
+                            button.className = 'w-full p-4 text-left bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+                            button.textContent = option;
+                            button.onclick = () => this.submitAnswer(option);
+                            options.appendChild(button);
+                        });
+                    } else if (data.game_type === 'chase') {
+                        document.getElementById('chaseScreen').classList.remove('hidden');
+                        this.isChaser = data.is_chaser;
+                        document.getElementById('chaseRole').textContent = data.is_chaser ? 'You are the Chaser!' : 'You are the Contestant!';
+                        document.getElementById('chaseStatus').textContent = `Category: ${data.chase_category}`;
+                        this.initChaseBoard(data.board_size);
+                    } else if (data.game_type === 'chinese_whispers') {
+                        document.getElementById('drawingScreen').classList.remove('hidden');
+                        this.isDrawer = data.is_drawer;
+                        if (data.is_drawer) {
+                            document.getElementById('drawingWord').textContent = `Draw: ${data.word}`;
+                            document.getElementById('drawingTurn').textContent = 'Your turn to draw!';
+                            this.initDrawingCanvas();
+                        } else {
+                            document.getElementById('drawingWord').textContent = 'Waiting for drawing...';
+                            document.getElementById('drawingTurn').textContent = 'Watch the drawing and guess the word';
+                        }
+                    }
+                });
+
+                this.socket.on('receive_drawing', (data) => {
+                    if (!this.isDrawer) {
+                        this.displayDrawing(data.drawing);
+                    }
+                });
+
+                this.socket.on('next_player', (data) => {
+                    document.getElementById('drawingTurn').textContent = `${data.player}'s turn`;
+                });
+
+                this.socket.on('round_complete', (data) => {
+                    this.showFeedback({
+                        title: 'Round Complete!',
+                        message: `The word was: ${data.original_word}`,
+                        stats: {
+                            'Final Guess': data.final_guess,
+                            'Your Score': data.scores[this.socket.id] || 0
+                        }
+                    });
+                });
+
+                this.socket.on('game_complete', (data) => {
+                    const isWinner = data.winner === this.socket.id;
+                    this.showFeedback({
+                        title: isWinner ? 'You Won!' : 'Game Over',
+                        message: isWinner ? 'Congratulations!' : 'Better luck next time!',
+                        stats: {
+                            'Your Score': data.final_scores[this.socket.id] || 0,
+                            'Best Score': Math.max(...Object.values(data.final_scores))
+                        }
+                    });
+                });
+            },
+
+            // Show feedback overlay
+            showFeedback(data) {
+                const feedback = document.getElementById('gameFeedback');
+                const title = document.getElementById('feedbackTitle');
+                const message = document.getElementById('feedbackMessage');
+                const stats = document.getElementById('feedbackStats');
+                const button = document.getElementById('feedbackButton');
+
+                title.textContent = data.title;
+                message.textContent = data.message;
+                
+                stats.innerHTML = '';
+                Object.entries(data.stats).forEach(([key, value]) => {
+                    const stat = document.createElement('div');
+                    stat.className = 'bg-gray-50 p-3 rounded-lg';
+                    stat.innerHTML = `
+                        <div class="text-sm text-gray-500">${key}</div>
+                        <div class="text-lg font-bold">${value}</div>
+                    `;
+                    stats.appendChild(stat);
+                });
+
+                feedback.classList.remove('hidden');
+                feedback.classList.add('flex');
+
+                button.onclick = () => {
+                    feedback.classList.add('hidden');
+                    feedback.classList.remove('flex');
+                };
             },
             
             showStatus(message, type = 'info') {
