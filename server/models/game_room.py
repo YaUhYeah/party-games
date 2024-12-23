@@ -195,12 +195,16 @@ class GameRoom:
 
     def get_next_question(self) -> Dict[str, Any]:
         """Get the next question for trivia game."""
-        available_questions = [q for q in TRIVIA_QUESTIONS if q not in self.used_questions]
+        # Track questions by their text to avoid unhashable dict issue
+        used_questions = {q['question'] for q in TRIVIA_QUESTIONS if q['question'] in self.used_questions}
+        available_questions = [q for q in TRIVIA_QUESTIONS if q['question'] not in used_questions]
+        
         if not available_questions:
             self.used_questions.clear()
             available_questions = TRIVIA_QUESTIONS
+            
         question = random.choice(available_questions)
-        self.used_questions.add(question)
+        self.used_questions.add(question['question'])  # Store just the question text
         return question
 
     def add_player(self, sid: str, name: str, profile_picture: str = None, is_host: bool = False) -> None:

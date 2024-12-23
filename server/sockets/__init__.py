@@ -9,6 +9,7 @@ import socketio
 from ..models.game_room import GameRoom, GameError
 from ..database import User, Achievement
 from ..config.game_config import GAME_CONFIG, MUSIC_CONFIG
+from ..config.questions import CHASE_QUESTIONS
 
 def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]):
     """Register all socket events."""
@@ -296,27 +297,35 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
             # Set up game-specific state
             if game_type == 'chinese_whispers':
-                # Create player order (excluding host)
-                room.player_order = [sid for sid, player in room.players.items() 
-                                   if player['connected'] and not player.get('is_host')]
-                random.shuffle(room.player_order)
-                room.current_player_index = 0
-                room.current_word = room.get_next_word()
-                
-                # Send initial state to all players
-                for player_sid in room.players:
-                    if not room.players[player_sid].get('is_host'):
-                        is_drawer = player_sid == room.player_order[0]
-                        await sio.emit('game_started', {
-                            'game_type': 'chinese_whispers',
-                            'round': 1,
-                            'total_rounds': room.total_rounds,
-                            'is_drawer': is_drawer,
-                            'word': room.current_word if is_drawer else None,
-                            'time_limit': GAME_CONFIG['time_limits']['drawing'][
-                                '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
-                            ]
-                        }, room=player_sid)
+                try:
+                    # Create player order (excluding host)
+                    room.player_order = [sid for sid, player in room.players.items() 
+                                       if player['connected'] and not player.get('is_host')]
+                    random.shuffle(room.player_order)
+                    room.current_player_index = 0
+                    room.current_word = room.get_next_word()
+                    room.drawings = []  # Clear previous drawings
+                    
+                    # Send initial state to all players
+                    for player_sid in room.players:
+                        if not room.players[player_sid].get('is_host'):
+                            is_drawer = player_sid == room.player_order[0]
+                            await sio.emit('game_started', {
+                                'game_type': 'chinese_whispers',
+                                'round': 1,
+                                'total_rounds': room.total_rounds,
+                                'is_drawer': is_drawer,
+                                'word': room.current_word if is_drawer else None,
+                                'time_limit': GAME_CONFIG['time_limits']['drawing'][
+                                    '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
+                                ]
+                            }, room=player_sid)
+                    
+                    print(f"Chinese Whispers game started with word: {room.current_word}")
+                    print(f"Player order: {[room.players[pid]['name'] for pid in room.player_order]}")
+                except Exception as e:
+                    print(f"Error initializing Chinese Whispers: {e}")
+                    raise
 
             elif game_type == 'trivia':
                 room.current_question = room.get_next_question()
@@ -338,9 +347,12 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                 non_host_players = [sid for sid, player in room.players.items() 
                                   if player['connected'] and not player.get('is_host')]
                 room.chaser = random.choice(non_host_players)
-                room.chase_category = random.choice(list(GAME_CONFIG['chase_categories']))
+                # Select random category from available chase questions
+                room.chase_category = random.choice(list(CHASE_QUESTIONS.keys()))
                 room.chase_position = 0
-                room.chase_questions = []  # Will be populated when chase starts
+                # Get initial questions for the category
+                room.chase_questions = CHASE_QUESTIONS[room.chase_category].copy()
+                random.shuffle(room.chase_questions)
                 
                 # Send initial state to all players
                 for player_sid in room.players:
@@ -363,12 +375,31 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             }, room=room_id)
 
             print(f"Game {game_type} started in room {room_id}")
+            print(f"Active players: {active_players}")
+            print(f"Game state: {room.game_state}")
+            print(f"Current game: {room.current_game}")
+            if game_type == 'chinese_whispers':
+                print(f"Current word: {room.current_word}")
+                print(f"Player order: {[room.players[pid]['name'] for pid in room.player_order]}")
+            elif game_type == 'trivia':
+                print(f"Current question: {room.current_question}")
+            elif game_type == 'chase':
+                print(f"Chase category: {room.chase_category}")
+                print(f"Chaser: {room.players[room.chaser]['name']}")
+                print(f"Questions loaded: {len(room.chase_questions)}")
 
         except Exception as e:
+            import traceback
             print(f"Error starting game: {e}")
+            print(f"Traceback: {traceback.format_exc()}")
             await sio.emit('game_error', {
                 'message': f'Failed to start game: {str(e)}'
             }, room=sid)
+            # Reset game state on error
+            if room_id in rooms:
+                room = rooms[room_id]
+                room.game_state = 'waiting'
+                room.current_game = None
 
     @sio.event
     async def submit_drawing(sid, data):
