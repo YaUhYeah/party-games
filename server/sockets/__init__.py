@@ -1,4 +1,3 @@
-"""Socket events module."""
 import base64
 import random
 from datetime import datetime
@@ -7,7 +6,7 @@ from typing import Dict, Optional
 import socketio
 
 from ..models.game_room import GameRoom, GameError
-from ..database import User, Achievement
+from ..database import User
 from ..config.game_config import GAME_CONFIG, MUSIC_CONFIG
 from ..config.questions import CHASE_QUESTIONS
 
@@ -16,66 +15,68 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
     @sio.event
     async def connect(sid, environ):
-        """Handle client connection."""
         print(f"Client connected: {sid}")
-        print(f"Connection details: {environ.get('QUERY_STRING', '')}")
-        
-        # Get room_id from query string if available
-        room_id = None
         query = environ.get('QUERY_STRING', '')
+        # If the room is missing, we can either let them join or disconnect
+        room_id = None
         if 'room_id=' in query:
             room_id = query.split('room_id=')[1].split('&')[0]
-            print(f"Client attempting to connect to room: {room_id}")
-            
-            # Validate room exists
+            print(f"Client {sid} attempting to connect to room {room_id}")
+            # If that room doesn't exist, we can disconnect them or create it
             if room_id not in rooms:
                 print(f"Warning: Room {room_id} not found")
-                await sio.emit('room_status', {
-                    'exists': False,
-                    'message': 'Room not found or expired'
-                }, room=sid)
-                # Disconnect the client if room doesn't exist
+                await sio.emit(
+                    'room_status',
+                    {'exists': False, 'message': 'Room not found or expired'},
+                    room=sid
+                )
                 await sio.disconnect(sid)
                 return False
+        # Otherwise, accept connection if we want
 
     @sio.event
     async def join_room(sid, data):
-        """Handle player joining a room."""
+        """
+        Handle player joining a room:
+        - If is_host=True, create the room if needed, or replace old host
+        - If not host, check name conflicts, store user in room
+        - Send join confirmations, player lists, etc.
+        """
         try:
             room_id = data['room_id']
             is_host = data.get('is_host', False)
             player_name = 'Host' if is_host else data['player_name']
             profile_picture = data.get('profile_picture')
 
-            print(f"Join room request: {data}")
+            print(f"join_room request from {sid}: {data}")
 
-            # Create room if it doesn't exist and this is a host
+            # If hosting a brand new room
             if room_id not in rooms and is_host:
                 rooms[room_id] = GameRoom(room_id)
                 print(f"Created new room: {room_id}")
 
-            # Validate room exists
+            # If room does not exist, error out
             if room_id not in rooms:
                 print(f"Error: Room {room_id} not found")
                 await sio.emit('join_error', {
-                    'message': 'Room not found or has expired. Please scan the QR code again.'
+                    'message': 'Room not found or expired. Please scan again.'
                 }, room=sid)
                 await sio.disconnect(sid)
                 return
 
             room = rooms[room_id]
 
+            # If host is re-joining or newly joining
             if is_host:
-                if room.host_sid:
-                    # Remove old host
-                    if room.host_sid in room.players:
-                        del room.players[room.host_sid]
-                        await sio.leave_room(room.host_sid, room_id)
+                # If there is an old host SID, remove it
+                if room.host_sid and room.host_sid in room.players:
+                    del room.players[room.host_sid]
+                    await sio.leave_room(room.host_sid, room_id)
                 room.host_sid = sid
                 room.players[sid] = {
                     'name': 'Host',
                     'is_host': True,
-                    'connected': True
+                    'connected': True,
                 }
                 await sio.enter_room(sid, room_id)
                 await sio.emit('join_success', {
@@ -85,7 +86,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                 }, room=sid)
                 return
 
-            # Check if username is taken by an active player
+            # Non-host: Check username conflicts
             for s, p in room.players.items():
                 if not p.get('is_host') and p['name'] == player_name and p['connected']:
                     await sio.emit('join_error', {
@@ -94,87 +95,56 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     await sio.disconnect(sid)
                     return
 
-            # Check if it's a rejoin case
+            # Possibly a rejoin
             existing_sid = None
             for s, p in room.players.items():
                 if not p.get('is_host') and p['name'] == player_name and not p['connected']:
                     existing_sid = s
                     break
+            # Clean up old SID if we found it
+            if existing_sid and existing_sid in room.players:
+                try:
+                    await sio.leave_room(existing_sid, room_id)
+                    del room.players[existing_sid]
+                except Exception as e:
+                    print(f"Error removing old connection: {e}")
 
-            if existing_sid:
-                # Remove old connection
-                if existing_sid in room.players:
-                    try:
-                        await sio.leave_room(existing_sid, room_id)
-                        del room.players[existing_sid]
-                    except Exception as e:
-                        print(f"Error removing old connection: {e}")
-
-            # Check if username exists or create new user
+            # Check or create DB user
             user = room.db.query(User).filter(User.username == player_name).first()
             if not user:
                 user = User(username=player_name)
                 room.db.add(user)
                 room.db.commit()
 
+            # If a base64-encoded profile picture was sent, attach it
             if profile_picture:
                 try:
+                    # Typically "data:image/png;base64,...."
                     image_data = base64.b64decode(profile_picture.split(',')[1])
                     user.profile_picture = image_data
                     room.db.commit()
                 except Exception as e:
                     print(f"Error processing profile picture: {e}")
-
             room.db.refresh(user)
 
-            try:
-                # Store user info in room
-                room.players[sid] = {
-                    'name': player_name,
-                    'user_id': user.id,
-                    'profile': profile_picture or '',
-                    'score': 0,
-                    'connected': True,
-                    'is_host': False
-                }
+            # Now store the player in room
+            room.players[sid] = {
+                'name': player_name,
+                'user_id': user.id,
+                'profile': profile_picture or '',
+                'score': 0,
+                'connected': True,
+                'is_host': False
+            }
+            await sio.enter_room(sid, room_id)
 
-                await sio.enter_room(sid, room_id)
-            except Exception as e:
-                print(f"Error storing user info or joining room: {e}")
-                await sio.emit('join_error', {
-                    'message': 'Failed to join room. Please try again.'
-                }, room=sid)
-                await sio.disconnect(sid)
-                return
-
-            # Send current game state to rejoining player
+            # If the room is mid-game, send partial state
+            # (not fully implemented here—just an example)
             if room.game_state != 'waiting':
-                state_data = {
-                    'state': room.game_state,
-                    'game_type': room.current_game,
-                    'round': room.round,
-                    'total_rounds': room.total_rounds,
-                }
+                # e.g. send 'game_state' event to the rejoining sid
+                pass
 
-                if room.current_game == 'chinese_whispers':
-                    state_data.update({
-                        'current_word': room.current_word,
-                        'is_your_turn': room.player_order[room.current_player_index] == sid
-                    })
-                elif room.current_game == 'trivia':
-                    state_data['current_question'] = room.current_question
-                elif room.current_game == 'chase':
-                    state_data.update({
-                        'chase_category': room.chase_category,
-                        'chase_position': room.chase_position,
-                        'is_chaser': room.chaser == sid,
-                        'is_contestant': room.chase_contestant == sid,
-                        'current_question': room.chase_questions[0] if room.chase_questions else None
-                    })
-
-                await sio.emit('game_state', state_data, room=sid)
-
-            # Update all clients with new player list
+            # Build a fresh player_list for the entire room
             player_list = []
             for player_sid, player_data in room.players.items():
                 if player_data['connected'] and not player_data.get('is_host'):
@@ -183,7 +153,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                         'score': player_data.get('score', 0)
                     })
 
-            # Send join confirmation to the player
+            # Confirm join to this sid only
             await sio.emit('join_confirmed', {
                 'player_name': player_name,
                 'room_id': room_id,
@@ -191,7 +161,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                 'current_players': player_list
             }, room=sid)
 
-            # Notify other players
+            # Notify everyone else in the room
             await sio.emit('player_joined', {
                 'players': player_list,
                 'new_player': player_name
@@ -201,304 +171,88 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
         except Exception as e:
             print(f"Error joining room: {e}")
-            await sio.emit('join_error', {
-                'message': f"Failed to join room: {str(e)}"
-            }, room=sid)
+            await sio.emit('join_error', {'message': str(e)}, room=sid)
+            await sio.disconnect(sid)
 
-    @sio.event
-    async def start_chase(sid, data):
-        """Handle chase game contestant start."""
-        try:
-            room_id = data['room_id']
-            if room_id not in rooms:
-                return
-            
-            room = rooms[room_id]
-            if room.current_game != 'chase':
-                return
-                
-            # Set contestant
-            room.chase_contestant = sid
-            contestant_name = room.players[sid]['name']
-            
-            # Generate offers
-            base_prize = random.randint(5000, 15000)
-            room.chase_state['offer_low'] = int(base_prize * 0.2)  # 20% of base
-            room.chase_state['offer_high'] = int(base_prize * 3)   # 300% of base
-            room.chase_state['current_prize'] = base_prize
-            
-            # Reset positions
-            room.chase_state['contestant_position'] = 0
-            room.chase_state['chaser_position'] = 0
-            
-            # Load first question
-            if room.chase_questions:
-                current_question = room.chase_questions[0]
-            else:
-                # Load more questions if needed
-                room.chase_questions = random.sample(
-                    CHASE_QUESTIONS[room.chase_category], 3)
-                current_question = room.chase_questions[0]
-            
-            # Notify all players
-            await sio.emit('chase_contestant_start', {
-                'contestant_name': contestant_name,
-                'base_prize': base_prize,
-                'high_offer': room.chase_state['offer_high'],
-                'low_offer': room.chase_state['offer_low'],
-                'question': current_question
-            }, room=room_id)
-            
-        except Exception as e:
-            print(f"Error in start_chase: {e}")
-            
-    @sio.event
-    async def chase_offer_selected(sid, data):
-        """Handle chase game offer selection."""
-        try:
-            room_id = data['room_id']
-            offer = data['offer']
-            if room_id not in rooms:
-                return
-                
-            room = rooms[room_id]
-            if room.current_game != 'chase' or room.chase_contestant != sid:
-                return
-                
-            # Set selected prize
-            room.chase_state['current_prize'] = offer
-            
-            # Set starting positions based on offer
-            if offer == room.chase_state['offer_high']:
-                room.chase_state['contestant_position'] = 1
-                room.chase_state['chaser_position'] = 3
-            elif offer == room.chase_state['offer_low']:
-                room.chase_state['contestant_position'] = 3
-                room.chase_state['chaser_position'] = 1
-            else:
-                room.chase_state['contestant_position'] = 2
-                room.chase_state['chaser_position'] = 2
-                
-            # Notify all players
-            await sio.emit('chase_game_start', {
-                'contestant_position': room.chase_state['contestant_position'],
-                'chaser_position': room.chase_state['chaser_position'],
-                'prize': room.chase_state['current_prize']
-            }, room=room_id)
-            
-        except Exception as e:
-            print(f"Error in chase_offer_selected: {e}")
-            
-    @sio.event
-    async def chase_answer(sid, data):
-        """Handle chase game answer submission."""
-        try:
-            room_id = data['room_id']
-            answer = data['answer']
-            if room_id not in rooms:
-                return
-                
-            room = rooms[room_id]
-            if room.current_game != 'chase':
-                return
-                
-            # Verify it's the right player's turn
-            is_chaser = sid == room.chaser
-            is_contestant = sid == room.chase_contestant
-            if not (is_chaser or is_contestant):
-                return
-                
-            current_question = room.chase_questions[0]
-            is_correct = answer == current_question['correct']
-            
-            # Update positions
-            if is_chaser:
-                if is_correct:
-                    room.chase_state['chaser_position'] += 1
-            else:  # contestant
-                if is_correct:
-                    room.chase_state['contestant_position'] += 1
-                    
-            # Check win/lose conditions
-            game_over = False
-            result = None
-            if room.chase_state['contestant_position'] >= room.chase_state['board_size']:
-                game_over = True
-                result = 'contestant_escaped'
-            elif room.chase_state['chaser_position'] >= room.chase_state['contestant_position']:
-                game_over = True
-                result = 'chaser_caught'
-                
-            # Remove used question
-            room.chase_questions.pop(0)
-            
-            # Load next question if game not over
-            next_question = None
-            if not game_over and room.chase_questions:
-                next_question = room.chase_questions[0]
-            elif not game_over:
-                # Load more questions
-                room.chase_questions = random.sample(
-                    CHASE_QUESTIONS[room.chase_category], 3)
-                next_question = room.chase_questions[0]
-                
-            # Notify all players
-            response = {
-                'player_type': 'chaser' if is_chaser else 'contestant',
-                'is_correct': is_correct,
-                'chaser_position': room.chase_state['chaser_position'],
-                'contestant_position': room.chase_state['contestant_position'],
-                'next_question': next_question if not game_over else None,
-                'game_over': game_over,
-                'result': result
-            }
-            
-            await sio.emit('chase_answer_result', response, room=room_id)
-            
-            # Handle game over
-            if game_over:
-                if result == 'contestant_escaped':
-                    # Award prize to contestant
-                    room.scores[room.chase_contestant] += room.chase_state['current_prize']
-                    
-                # Reset for next contestant
-                room.chase_contestant = None
-                room.chase_state['contestant_position'] = 0
-                room.chase_state['chaser_position'] = 0
-                
-                # Update all players with new scores
-                await sio.emit('scores_update', {
-                    'scores': room.scores,
-                    'players': [{
-                        'name': p['name'],
-                        'score': room.scores.get(sid, 0)
-                    } for sid, p in room.players.items() if not p.get('is_host')]
-                }, room=room_id)
-                
-        except Exception as e:
-            print(f"Error in chase_answer: {e}")
-
-    @sio.event
-    async def disconnect(sid):
-        """Handle client disconnection."""
-        print(f"Client disconnected: {sid}")
-        for room in rooms.values():
-            if sid in room.players:
-                player_data = room.players[sid]
-                # Mark player as disconnected instead of removing
-                player_data['connected'] = False
-
-                # Handle special cases based on game state
-                if room.current_game == 'chase':
-                    if sid == room.chaser:
-                        # Chaser disconnected, reset chase game
-                        room.chaser = None
-                        room.chase_category = None
-                        room.chase_contestant = None
-                        room.game_state = 'waiting'
-                        await sio.emit('chase_cancelled', {
-                            'reason': 'Chaser disconnected'
-                        }, room=room.room_id)
-                    elif sid == room.chase_contestant:
-                        # Contestant disconnected, reset current chase
-                        room.chase_contestant = None
-                        room.game_state = 'chase_setup'
-                        await sio.emit('chase_cancelled', {
-                            'reason': 'Contestant disconnected'
-                        }, room=room.room_id)
-
-                # Update player list for all clients
-                player_list = []
-                for p_sid, p_data in room.players.items():
-                    if p_data['connected'] and not p_data.get('is_host'):
-                        player_list.append({
-                            'name': p_data['name'],
-                            'score': p_data.get('score', 0)
-                        })
-
-                await sio.emit('player_left', {
-                    'players': player_list,
-                    'disconnected_player': player_data['name']
-                }, room=room.room_id)
-
-                # If not enough players, end the game
-                active_players = sum(1 for p in room.players.values()
-                                    if p['connected'] and not p.get('is_host'))
-                if active_players < 2:  # Minimum 2 players for any game
-                    room.game_state = 'waiting'
-                    room.current_game = None
-                    await sio.emit('game_cancelled', {
-                        'reason': 'Not enough players'
-                    }, room=room.room_id)
-
-                # If it was this player's turn in drawing game, move to next player
-                if (room.game_state == 'playing' and
-                        room.current_game == 'chinese_whispers' and
-                        room.player_order[room.current_player_index] == sid):
-                    room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
-                    next_player_id = room.player_order[room.current_player_index]
-
-                    # Skip disconnected players
-                    while not room.players[next_player_id]['connected']:
-                        room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
-                        next_player_id = room.player_order[room.current_player_index]
-
-                    await sio.emit('next_player', {
-                        'player': room.players[next_player_id]['name'],
-                        'skipped_disconnected': True
-                    }, room=room.room_id)
-
+    # Example of the "start_game" event logic
     @sio.event
     async def start_game(sid, data):
-        """Handle game start request from host."""
+        """
+        Host triggers this to begin a chosen game_type (chase/trivia/chinese_whispers).
+        We'll handle the logic for setting up the first round, etc.
+        """
         try:
             room_id = data['room_id']
             game_type = data['game_type']
-
-            print(f"Game {game_type} started in room {room_id}")
-
             if room_id not in rooms:
-                await sio.emit('game_error', {
-                    'message': 'Room not found'
-                }, room=sid)
+                await sio.emit('game_error', {'message': 'Room not found'}, room=sid)
                 return
 
             room = rooms[room_id]
 
-            # Verify sender is host
+            # Must be host
             if sid != room.host_sid:
+                await sio.emit('game_error', {'message': 'Only host can start'}, room=sid)
+                return
+
+            # Count active players (excluding host)
+            active_players = [pid for pid, p in room.players.items() if p['connected'] and not p.get('is_host')]
+            if len(active_players) < GAME_CONFIG['game_modes'][game_type]['min_players']:
                 await sio.emit('game_error', {
-                    'message': 'Only the host can start the game'
+                    'message': f"Need at least {GAME_CONFIG['game_modes'][game_type]['min_players']} players to start {game_type}"
                 }, room=sid)
                 return
-                
-            # Get active players (excluding host)
-            active_players = [p_sid for p_sid, p in room.players.items() 
-                            if p['connected'] and not p.get('is_host')]
-            print(f"Active players: {len(active_players)}")
 
-            # Initialize game state
-            room.game_state = 'playing'
+            # Initialize common stuff
             room.current_game = game_type
-            print(f"Game state: {room.game_state}")
-            print(f"Current game: {room.current_game}")
+            room.game_state = 'playing'
+            room.round = 1
+            room.total_rounds = GAME_CONFIG['rounds_per_game']
+            room.scores = {pid: 0 for pid in active_players}  # track scores
+            room.player_answers = {}
+            room.drawings = []
+            room.player_order = active_players[:]  # naive approach
+            random.shuffle(room.player_order)
 
-            if game_type == 'chase':
-                # Select random chaser from active players
+            if game_type == 'chinese_whispers':
+                room.current_word = room.get_next_word()
+                room.current_player_index = 0
+                # "is_drawer" for the first player
+                for player_sid in room.players:
+                    if room.players[player_sid]['connected'] and not room.players[player_sid].get('is_host'):
+                        is_drawer = (player_sid == room.player_order[0])
+                        await sio.emit('game_started', {
+                            'game_type': 'chinese_whispers',
+                            'round': 1,
+                            'total_rounds': room.total_rounds,
+                            'is_drawer': is_drawer,
+                            'word': room.current_word if is_drawer else None,
+                            'time_limit': _get_drawing_time_limit(len(active_players)),
+                            'game_state': 'playing'
+                        }, room=player_sid)
+
+            elif game_type == 'trivia':
+                room.current_question = room.get_next_question()
+                # Broadcast to all players
+                await sio.emit('game_started', {
+                    'game_type': 'trivia',
+                    'round': 1,
+                    'total_rounds': room.total_rounds,
+                    'question': room.current_question,
+                    'time_limit': _get_trivia_time_limit(len(active_players)),
+                    'game_state': 'playing',
+                    'scores': room.scores
+                }, room=room_id)
+
+            elif game_type == 'chase':
+                # Pick a random chaser
                 chaser_sid = random.choice(active_players)
                 room.chaser = chaser_sid
-                room.chase_contestant = None  # Will be set when first contestant starts
-                
-                # Select random category
+                # Pick a random category
                 room.chase_category = random.choice(list(CHASE_QUESTIONS.keys()))
-                print(f"Chase category: {room.chase_category}")
-                print(f"Chaser: {room.players[chaser_sid]['name']}")
-                
-                # Load initial questions
                 room.chase_questions = random.sample(CHASE_QUESTIONS[room.chase_category], 3)
-                print(f"Questions loaded: {len(room.chase_questions)}")
-                
                 # Reset chase state
+                room.chase_contestant = None
                 room.chase_position = 0
                 room.chase_state = {
                     'board_size': GAME_CONFIG['chase_board_size'],
@@ -513,199 +267,59 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                         'double_steps': 1,
                         'shield': 1,
                         'time_freeze': 1
-                    }
+                    },
                 }
-                
-                # Initialize scores
-                room.scores = {sid: 0 for sid in active_players}
-                
-                # Notify all players
+                # Broadcast to all
                 for player_sid in room.players:
-                    if room.players[player_sid].get('connected'):
+                    if room.players[player_sid]['connected'] and not room.players[player_sid].get('is_host'):
+                        is_chaser = (player_sid == chaser_sid)
                         await sio.emit('game_started', {
                             'game_type': 'chase',
-                            'is_chaser': player_sid == chaser_sid,
+                            'is_chaser': is_chaser,
                             'chase_category': room.chase_category,
                             'board_size': room.chase_state['board_size'],
-                            'time_limit': GAME_CONFIG['time_limits']['chase'],
-                            'game_state': room.game_state,
-                            'chaser_name': room.players[chaser_sid]['name'],
-                            'scores': room.scores,
-                            'players': [{
-                                'name': p['name'],
-                                'score': room.scores.get(sid, 0)
-                            } for sid, p in room.players.items() if not p.get('is_host')]
-                        }, room=player_sid)
-                
-                # Start background music
-                await sio.emit('play_music', {
-                    'track': 'chase',
-                    'volume': 0.4,
-                    'loop': True
-                }, room=room_id)
-
-            # Check minimum player count
-            active_players = sum(1 for p in room.players.values()
-                               if p['connected'] and not p.get('is_host'))
-            min_players = GAME_CONFIG['game_modes'][game_type]['min_players']
-            
-            if active_players < min_players:
-                await sio.emit('game_error', {
-                    'message': f'Need at least {min_players} players to start {game_type}'
-                }, room=sid)
-                return
-
-            # Initialize game state
-            room.current_game = game_type
-            room.game_state = 'playing'
-            room.round = 1
-            room.total_rounds = GAME_CONFIG['rounds_per_game']
-            room.scores = {sid: 0 for sid, player in room.players.items() if not player.get('is_host')}
-            room.round_start_time = datetime.now()
-            room.player_answers = {}  # Reset answers
-            room.player_streaks = {}  # Reset streaks
-            room.drawings = []  # Reset drawings
-
-            # Set up game-specific state
-            if game_type == 'chinese_whispers':
-                try:
-                    # Create player order (excluding host)
-                    room.player_order = [sid for sid, player in room.players.items() 
-                                       if player['connected'] and not player.get('is_host')]
-                    random.shuffle(room.player_order)
-                    room.current_player_index = 0
-                    room.current_word = room.get_next_word()
-                    room.drawings = []  # Clear previous drawings
-                    
-                    # Send initial state to all players
-                    for player_sid in room.players:
-                        if not room.players[player_sid].get('is_host'):
-                            is_drawer = player_sid == room.player_order[0]
-                            await sio.emit('game_started', {
-                                'game_type': 'chinese_whispers',
-                                'round': 1,
-                                'total_rounds': room.total_rounds,
-                                'is_drawer': is_drawer,
-                                'word': room.current_word if is_drawer else None,
-                                'time_limit': GAME_CONFIG['time_limits']['drawing'][
-                                    '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
-                                ],
-                                'current_player': room.players[room.player_order[0]]['name'],
-                                'game_state': 'playing'
-                            }, room=player_sid)
-                    
-                    print(f"Chinese Whispers game started with word: {room.current_word}")
-                    print(f"Player order: {[room.players[pid]['name'] for pid in room.player_order]}")
-                except Exception as e:
-                    print(f"Error initializing Chinese Whispers: {e}")
-                    raise
-
-            elif game_type == 'trivia':
-                room.current_question = room.get_next_question()
-                room.player_answers = {}
-                
-                # Send initial state to all players
-                await sio.emit('game_started', {
-                    'game_type': 'trivia',
-                    'round': 1,
-                    'total_rounds': room.total_rounds,
-                    'question': room.current_question,
-                    'time_limit': GAME_CONFIG['time_limits']['trivia'][
-                        '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
-                    ],
-                    'game_state': 'playing',
-                    'scores': room.scores,
-                    'players': [{'name': p['name'], 'score': room.scores.get(sid, 0)} 
-                              for sid, p in room.players.items() if not p.get('is_host')]
-                }, room=room_id)
-                
-                print(f"Trivia game started with question: {room.current_question['question']}")
-
-            elif game_type == 'chase':
-                # Select random chaser
-                non_host_players = [sid for sid, player in room.players.items() 
-                                  if player['connected'] and not player.get('is_host')]
-                room.chaser = random.choice(non_host_players)
-                # Select random category from available chase questions
-                room.chase_category = random.choice(list(CHASE_QUESTIONS.keys()))
-                room.chase_position = 0
-                # Get initial questions for the category
-                room.chase_questions = CHASE_QUESTIONS[room.chase_category].copy()
-                random.shuffle(room.chase_questions)
-                
-                # Send initial state to all players
-                for player_sid in room.players:
-                    if not room.players[player_sid].get('is_host'):
-                        await sio.emit('game_started', {
-                            'game_type': 'chase',
-                            'is_chaser': player_sid == room.chaser,
-                            'chase_category': room.chase_category,
-                            'board_size': room.chase_state['board_size'],
-                            'time_limit': GAME_CONFIG['time_limits']['chase'][
-                                '2' if active_players == 2 else '3+'
-                            ],
+                            'time_limit': _get_chase_time_limit(len(active_players)),
                             'game_state': 'playing',
-                            'chaser_name': room.players[room.chaser]['name'],
-                            'scores': room.scores,
-                            'players': [{'name': p['name'], 'score': room.scores.get(sid, 0)} 
-                                      for sid, p in room.players.items() if not p.get('is_host')]
+                            'chaser_name': room.players[chaser_sid]['name'],
+                            'scores': room.scores
                         }, room=player_sid)
 
-            # Start background music
+            # Optionally play music
             await sio.emit('play_music', {
                 'track': game_type,
                 'volume': MUSIC_CONFIG[game_type]['volume'],
                 'loop': True
             }, room=room_id)
 
-            print(f"Game {game_type} started in room {room_id}")
-            print(f"Active players: {active_players}")
-            print(f"Game state: {room.game_state}")
-            print(f"Current game: {room.current_game}")
-            if game_type == 'chinese_whispers':
-                print(f"Current word: {room.current_word}")
-                print(f"Player order: {[room.players[pid]['name'] for pid in room.player_order]}")
-            elif game_type == 'trivia':
-                print(f"Current question: {room.current_question}")
-            elif game_type == 'chase':
-                print(f"Chase category: {room.chase_category}")
-                print(f"Chaser: {room.players[room.chaser]['name']}")
-                print(f"Questions loaded: {len(room.chase_questions)}")
-
         except Exception as e:
             import traceback
             print(f"Error starting game: {e}")
-            print(f"Traceback: {traceback.format_exc()}")
-            await sio.emit('game_error', {
-                'message': f'Failed to start game: {str(e)}'
-            }, room=sid)
-            # Reset game state on error
+            print(traceback.format_exc())
+            await sio.emit('game_error', {'message': str(e)}, room=sid)
+            # Possibly reset
             if room_id in rooms:
-                room = rooms[room_id]
-                room.game_state = 'waiting'
-                room.current_game = None
+                rooms[room_id].game_state = 'waiting'
+                rooms[room_id].current_game = None
 
     @sio.event
     async def submit_drawing(sid, data):
-        """Handle drawing submission in Chinese Whispers game."""
+        """When the drawer in Chinese Whispers finishes and passes the drawing along."""
         try:
             room_id = data['room_id']
             drawing_data = data['drawing']
-
             if room_id not in rooms:
                 return
-
             room = rooms[room_id]
+
             if room.game_state != 'playing' or room.current_game != 'chinese_whispers':
                 return
 
+            # Must be the current drawer
             if sid != room.player_order[room.current_player_index]:
-                await sio.emit('game_error', {
-                    'message': 'Not your turn to draw'
-                }, room=sid)
+                await sio.emit('game_error', {'message': 'Not your turn to draw'}, room=sid)
                 return
 
-            # Store drawing
+            # Store the drawing
             room.drawings.append({
                 'player': room.players[sid]['name'],
                 'data': drawing_data,
@@ -716,53 +330,49 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
             next_player_id = room.player_order[room.current_player_index]
 
-            # Send drawing to next player
+            # Send the drawing to that next player
             await sio.emit('receive_drawing', {
                 'drawing': drawing_data,
                 'previous_player': room.players[sid]['name']
             }, room=next_player_id)
 
-            # Notify all players of turn change
+            # Notify entire room of whose turn it is
             await sio.emit('next_player', {
                 'player': room.players[next_player_id]['name']
             }, room=room_id)
 
         except Exception as e:
-            print(f"Error submitting drawing: {e}")
-            await sio.emit('game_error', {
-                'message': f'Failed to submit drawing: {str(e)}'
-            }, room=sid)
+            print(f"Error in submit_drawing: {e}")
+            await sio.emit('game_error', {'message': str(e)}, room=sid)
 
     @sio.event
     async def submit_guess(sid, data):
-        """Handle word guess in Chinese Whispers game."""
+        """In Chinese Whispers, a guess about the final word (or the next clue)."""
         try:
             room_id = data['room_id']
             guess = data['guess'].strip().lower()
-
             if room_id not in rooms:
                 return
-
             room = rooms[room_id]
-            if room.game_state != 'playing' or room.current_game != 'chinese_whispers':
+            if room.current_game != 'chinese_whispers':
                 return
 
+            # Must be that player's turn
             if sid != room.player_order[room.current_player_index]:
-                await sio.emit('game_error', {
-                    'message': 'Not your turn to guess'
-                }, room=sid)
+                await sio.emit('game_error', {'message': 'Not your turn to guess'}, room=sid)
                 return
 
             # Store guess
             room.player_answers[sid] = guess
 
-            # Calculate score
-            score_result = room.calculate_score(sid, guess == room.current_word.lower())
-            room.scores[sid] = room.scores.get(sid, 0) + score_result['total_score']
+            # Evaluate correctness
+            is_correct = (guess == room.current_word.lower())
+            scoring = room.calculate_score(sid, is_correct)
+            room.scores[sid] = room.scores.get(sid, 0) + scoring['total_score']
 
-            # Check if round is complete
+            # If last in order, that means the round is done
             if room.current_player_index == len(room.player_order) - 1:
-                # Round complete
+                # Round ends
                 await sio.emit('round_complete', {
                     'original_word': room.current_word,
                     'final_guess': guess,
@@ -770,122 +380,199 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     'drawings': room.drawings
                 }, room=room_id)
 
-                # Check if game is complete
+                # Check if game is fully done
                 if room.round >= room.total_rounds:
-                    # Game complete
+                    # Game over
                     await sio.emit('game_complete', {
                         'final_scores': room.scores,
-                        'winner': max(room.scores.items(), key=lambda x: x[1])[0]
+                        'winner': _highest_scorer_name(room)
                     }, room=room_id)
                     room.game_state = 'waiting'
+                    room.current_game = None
                 else:
-                    # Start next round
+                    # Next round
                     room.round += 1
                     room.reset_round()
+                    # new word, reset index
                     room.current_word = room.get_next_word()
                     room.current_player_index = 0
-                    
-                    # Notify players of next round
-                    for player_sid in room.players:
-                        if not room.players[player_sid].get('is_host'):
-                            is_drawer = player_sid == room.player_order[0]
+
+                    # Let players know the next round started
+                    for pid in room.players:
+                        if not room.players[pid].get('is_host'):
+                            is_drawer = (pid == room.player_order[0])
                             await sio.emit('round_start', {
                                 'round': room.round,
                                 'is_drawer': is_drawer,
                                 'word': room.current_word if is_drawer else None
-                            }, room=player_sid)
+                            }, room=pid)
             else:
-                # Move to next player
+                # Move to next
                 room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
                 next_player_id = room.player_order[room.current_player_index]
-
-                # Send current state to next player
                 await sio.emit('your_turn', {
                     'previous_guess': guess
                 }, room=next_player_id)
-
-                # Notify all players of turn change
                 await sio.emit('next_player', {
                     'player': room.players[next_player_id]['name']
                 }, room=room_id)
 
         except Exception as e:
-            print(f"Error submitting guess: {e}")
-            await sio.emit('game_error', {
-                'message': f'Failed to submit guess: {str(e)}'
-            }, room=sid)
+            print(f"Error in submit_guess: {e}")
+            await sio.emit('game_error', {'message': str(e)}, room=sid)
 
     @sio.event
     async def submit_answer(sid, data):
-        """Handle answer submission in Trivia game."""
+        """In Trivia, user sends an answer. We check correctness, update scores, handle next round."""
         try:
             room_id = data['room_id']
             answer = data['answer']
-            answer_time = data.get('answer_time')  # Time taken to answer in seconds
+            answer_time = data.get('answer_time')  # optional
 
             if room_id not in rooms:
                 return
-
             room = rooms[room_id]
-            if room.game_state != 'playing' or room.current_game != 'trivia':
+            if room.current_game != 'trivia' or room.game_state != 'playing':
                 return
 
-            # Check if player already answered
+            # Check if they've already answered
             if sid in room.player_answers:
-                return
+                return  # ignore
 
-            # Store answer
+            # Mark answer
             room.player_answers[sid] = answer
+            is_correct = (answer == room.current_question['correct'])
+            scoring = room.calculate_score(sid, is_correct, answer_time)
+            room.scores[sid] = room.scores.get(sid, 0) + scoring['total_score']
 
-            # Calculate score
-            is_correct = answer == room.current_question['correct']
-            score_result = room.calculate_score(sid, is_correct, answer_time)
-            room.scores[sid] = room.scores.get(sid, 0) + score_result['total_score']
-
-            # Send immediate feedback to the player
+            # Immediate feedback
             await sio.emit('answer_result', {
                 'correct': is_correct,
-                'score': score_result['total_score'],
+                'score': scoring['total_score'],
                 'streak': room.player_streaks.get(sid, 0)
             }, room=sid)
 
-            # Check if all players have answered
-            active_players = sum(1 for p in room.players.values()
-                               if p['connected'] and not p.get('is_host'))
-            if len(room.player_answers) >= active_players:
-                # Round complete
+            # If all active have answered
+            active_players = [pid for pid, p in room.players.items() if p['connected'] and not p.get('is_host')]
+            if len(room.player_answers) >= len(active_players):
+                # End of round
                 await sio.emit('round_complete', {
                     'question': room.current_question,
-                    'answers': {room.players[p_sid]['name']: ans 
-                              for p_sid, ans in room.player_answers.items()},
+                    'answers': {
+                        room.players[p]['name']: ans for p, ans in room.player_answers.items()
+                    },
                     'scores': room.scores
                 }, room=room_id)
 
-                # Check if game is complete
+                # Check if final round
                 if room.round >= room.total_rounds:
-                    # Game complete
                     await sio.emit('game_complete', {
                         'final_scores': room.scores,
-                        'winner': max(room.scores.items(), key=lambda x: x[1])[0]
+                        'winner': _highest_scorer_name(room)
                     }, room=room_id)
                     room.game_state = 'waiting'
+                    room.current_game = None
                 else:
-                    # Start next round
+                    # Next round
                     room.round += 1
                     room.reset_round()
                     room.current_question = room.get_next_question()
-                    
-                    # Notify players of next round
+
                     await sio.emit('round_start', {
                         'round': room.round,
                         'question': room.current_question,
-                        'time_limit': GAME_CONFIG['time_limits']['trivia'][
-                            '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
-                        ]
+                        'time_limit': _get_trivia_time_limit(len(active_players))
                     }, room=room_id)
 
         except Exception as e:
-            print(f"Error submitting answer: {e}")
-            await sio.emit('game_error', {
-                'message': f'Failed to submit answer: {str(e)}'
-            }, room=sid)
+            print(f"Error in submit_answer: {e}")
+            await sio.emit('game_error', {'message': str(e)}, room=sid)
+
+    @sio.event
+    async def disconnect(sid):
+        print(f"Client disconnected: {sid}")
+        # Mark them disconnected and handle special cases (chaser, drawer, etc.)
+        for room in rooms.values():
+            if sid in room.players:
+                room.players[sid]['connected'] = False
+                disc_name = room.players[sid]['name']
+
+                # If chaser or chase contestant leaves mid-chase
+                if room.current_game == 'chase':
+                    if sid == room.chaser:
+                        room.chaser = None
+                        room.game_state = 'waiting'
+                        await sio.emit('chase_cancelled', {
+                            'reason': f'Chaser {disc_name} disconnected'
+                        }, room=room.room_id)
+                    elif sid == room.chase_contestant:
+                        room.chase_contestant = None
+                        room.game_state = 'chase_setup'
+                        await sio.emit('chase_cancelled', {
+                            'reason': f'Contestant {disc_name} disconnected'
+                        }, room=room.room_id)
+
+                # Update players
+                active_players = [
+                    p for p in room.players.values()
+                    if p['connected'] and not p.get('is_host')
+                ]
+                if len(active_players) < 2 and room.game_state == 'playing':
+                    room.game_state = 'waiting'
+                    room.current_game = None
+                    await sio.emit('game_cancelled', {
+                        'reason': 'Not enough players'
+                    }, room=room.room_id)
+
+                # If they were drawing in Chinese Whispers
+                if (room.current_game == 'chinese_whispers' and
+                    sid == room.player_order[room.current_player_index]):
+                    room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+                    next_player = room.player_order[room.current_player_index]
+                    while not room.players[next_player]['connected']:
+                        room.current_player_index = (room.current_player_index + 1) % len(room.player_order)
+                        next_player = room.player_order[room.current_player_index]
+                    await sio.emit('next_player', {
+                        'player': room.players[next_player]['name'],
+                        'skipped_disconnected': True
+                    }, room=room.room_id)
+
+                # Broadcast updated players
+                updated_list = [
+                    {'name': p['name'], 'score': p.get('score', 0)}
+                    for s, p in room.players.items() if p['connected'] and not p.get('is_host')
+                ]
+                await sio.emit('player_left', {
+                    'players': updated_list,
+                    'disconnected_player': disc_name
+                }, room=room.room_id)
+
+# Helper methods for time-limits
+def _get_drawing_time_limit(player_count: int) -> int:
+    if player_count <= 3:
+        return GAME_CONFIG['time_limits']['drawing']['2-3']
+    elif player_count <= 6:
+        return GAME_CONFIG['time_limits']['drawing']['4-6']
+    else:
+        return GAME_CONFIG['time_limits']['drawing']['7+']
+
+def _get_trivia_time_limit(player_count: int) -> int:
+    if player_count <= 3:
+        return GAME_CONFIG['time_limits']['trivia']['2-3']
+    elif player_count <= 6:
+        return GAME_CONFIG['time_limits']['trivia']['4-6']
+    else:
+        return GAME_CONFIG['time_limits']['trivia']['7+']
+
+def _get_chase_time_limit(player_count: int) -> int:
+    if player_count == 2:
+        return GAME_CONFIG['time_limits']['chase']['2']
+    else:
+        return GAME_CONFIG['time_limits']['chase']['3+']
+
+def _highest_scorer_name(room: GameRoom) -> str:
+    # Return the name of the highest-scoring player (excluding host)
+    if not room.scores:
+        return "Nobody"
+    top_player_id = max(room.scores, key=room.scores.get)
+    return room.players[top_player_id]['name']
