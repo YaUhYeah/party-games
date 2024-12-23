@@ -15,12 +15,29 @@ rooms: Dict[str, GameRoom] = {}
 
 def create_app() -> socketio.ASGIApp:
     """Create and configure the application."""
+    from server.database import init_db
+    init_db()  # Initialize database
     # Create FastAPI app
     app = FastAPI(
         title="Party Games Hub",
         description="A collection of fun multiplayer party games",
-        version="1.0.0"
+        version="1.0.0",
+        docs_url=None,  # Disable docs in production
+        redoc_url=None  # Disable redoc in production
     )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):
+        print(f"Global exception handler caught: {exc}")
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error": "An unexpected error occurred. Please try again.",
+                "show_refresh": True
+            },
+            status_code=500
+        )
 
     # Configure CORS
     app.add_middleware(
@@ -46,7 +63,9 @@ def create_app() -> socketio.ASGIApp:
         reconnection_delay_max=5000,
         allow_upgrades=True,  # Allow WebSocket upgrades
         http_compression=True,  # Enable compression
-        transports=['websocket', 'polling']  # Prefer WebSocket
+        transports=['websocket', 'polling'],  # Prefer WebSocket
+        async_handlers=True,  # Enable async handlers
+        json=True  # Enable JSON serialization
     )
 
     # Set up static files and templates
@@ -107,11 +126,16 @@ def create_app() -> socketio.ASGIApp:
     socket_app = socketio.ASGIApp(
         sio,
         app,
-        static_files={
-            '/': {'content_type': 'text/html', 'filename': 'index.html'}
-        },
-        on_startup=[lambda: print("Socket.IO server started")],
-        on_shutdown=[lambda: print("Socket.IO server shutting down")]
+        socketio_path='socket.io'
     )
+
+    # Add startup and shutdown handlers
+    @app.on_event("startup")
+    async def startup_event():
+        print("Socket.IO server started")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        print("Socket.IO server shutting down")
 
     return socket_app
