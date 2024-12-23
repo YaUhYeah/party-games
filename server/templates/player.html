@@ -158,30 +158,30 @@
                                     <div class="color-picker flex space-x-2">
                                         <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #000000"
-                                                onclick="window.gameState.setProfileColor('#000000')"></button>
+                                                onclick="gameState.setProfileColor('#000000')"></button>
                                         <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #FF0000"
-                                                onclick="window.gameState.setProfileColor('#FF0000')"></button>
+                                                onclick="gameState.setProfileColor('#FF0000')"></button>
                                         <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #00FF00"
-                                                onclick="window.gameState.setProfileColor('#00FF00')"></button>
+                                                onclick="gameState.setProfileColor('#00FF00')"></button>
                                         <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #0000FF"
-                                                onclick="window.gameState.setProfileColor('#0000FF')"></button>
+                                                onclick="gameState.setProfileColor('#0000FF')"></button>
                                     </div>
 
                                     <!-- Tool buttons -->
                                     <div class="tool-buttons flex space-x-2">
                                         <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
-                                                onclick="window.gameState.setProfileTool('brush')" title="Brush">
+                                                onclick="gameState.setProfileTool('brush')" title="Brush">
                                             <i class="fas fa-paint-brush text-gray-600 text-lg"></i>
                                         </button>
                                         <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
-                                                onclick="window.gameState.setProfileTool('eraser')" title="Eraser">
+                                                onclick="gameState.setProfileTool('eraser')" title="Eraser">
                                             <i class="fas fa-eraser text-gray-600 text-lg"></i>
                                         </button>
                                         <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
-                                                onclick="window.gameState.clearProfileCanvas()" title="Clear">
+                                                onclick="gameState.clearProfileCanvas()" title="Clear">
                                             <i class="fas fa-trash-alt text-gray-600 text-lg"></i>
                                         </button>
                                     </div>
@@ -193,7 +193,7 @@
                                                min="1" 
                                                max="20" 
                                                value="4"
-                                               oninput="window.gameState.setProfileBrushSize(this.value)"
+                                               oninput="gameState.setProfileBrushSize(this.value)"
                                                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
                                     </div>
                                 </div>
@@ -205,7 +205,8 @@
                         </div>
 
                         <button id="joinButton" type="button"
-                                class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2">
+                                class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+                                onclick="gameState.joinGame()">
                             <span class="join-text font-semibold">Join Game</span>
                             <span class="loading-spinner hidden">
                                 <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -381,6 +382,9 @@
             currentGame: null,
             isDrawer: false,
             isChaser: false,
+            joiningInProgress: false,
+            answerSubmitted: false,
+            profileCtx: null,
             debugState: {
                 socketConnected: false,
                 lastError: null,
@@ -498,7 +502,7 @@
                 });
                 
                 // Initialize chase game board
-                initChaseBoard(size) {
+                initChaseBoard: function(size) {
                     const board = document.getElementById('chaseBoard');
                     if (!board) {
                         console.error('Chase board element not found');
@@ -1020,7 +1024,7 @@
             },
             
             // Initialize the game
-            init() {
+            init: function() {
                 console.log('Initializing game with room ID:', this.roomId);
                 
                 // Initialize state
@@ -1395,16 +1399,18 @@
                 this.socket.on('chase_game_over', (data) => {
                     this.showGameResults(data);
                 });
-                
-                this.socket.on('game_complete', (data) => {
-                    console.log('Game complete:', data);
-                    this.showGameResults(data);
-                });
-                
-                showGameResults(data) {
-                    // Create results overlay
-                    const overlay = document.createElement('div');
-                    overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+            }
+        };
+
+        // Initialize the game state
+        window.gameState = gameState;
+        window.addEventListener('DOMContentLoaded', () => {
+            gameState.init();
+        });
+    </script>
+</body>
+</html>
+
                     
                     const content = document.createElement('div');
                     content.className = 'bg-white rounded-xl p-8 max-w-2xl w-11/12 transform transition-all';
