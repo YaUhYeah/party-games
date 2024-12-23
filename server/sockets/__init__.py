@@ -206,6 +206,179 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             }, room=sid)
 
     @sio.event
+    async def start_chase(sid, data):
+        """Handle chase game contestant start."""
+        try:
+            room_id = data['room_id']
+            if room_id not in rooms:
+                return
+            
+            room = rooms[room_id]
+            if room.current_game != 'chase':
+                return
+                
+            # Set contestant
+            room.chase_contestant = sid
+            contestant_name = room.players[sid]['name']
+            
+            # Generate offers
+            base_prize = random.randint(5000, 15000)
+            room.chase_state['offer_low'] = int(base_prize * 0.2)  # 20% of base
+            room.chase_state['offer_high'] = int(base_prize * 3)   # 300% of base
+            room.chase_state['current_prize'] = base_prize
+            
+            # Reset positions
+            room.chase_state['contestant_position'] = 0
+            room.chase_state['chaser_position'] = 0
+            
+            # Load first question
+            if room.chase_questions:
+                current_question = room.chase_questions[0]
+            else:
+                # Load more questions if needed
+                room.chase_questions = random.sample(
+                    CHASE_QUESTIONS[room.chase_category], 3)
+                current_question = room.chase_questions[0]
+            
+            # Notify all players
+            await sio.emit('chase_contestant_start', {
+                'contestant_name': contestant_name,
+                'base_prize': base_prize,
+                'high_offer': room.chase_state['offer_high'],
+                'low_offer': room.chase_state['offer_low'],
+                'question': current_question
+            }, room=room_id)
+            
+        except Exception as e:
+            print(f"Error in start_chase: {e}")
+            
+    @sio.event
+    async def chase_offer_selected(sid, data):
+        """Handle chase game offer selection."""
+        try:
+            room_id = data['room_id']
+            offer = data['offer']
+            if room_id not in rooms:
+                return
+                
+            room = rooms[room_id]
+            if room.current_game != 'chase' or room.chase_contestant != sid:
+                return
+                
+            # Set selected prize
+            room.chase_state['current_prize'] = offer
+            
+            # Set starting positions based on offer
+            if offer == room.chase_state['offer_high']:
+                room.chase_state['contestant_position'] = 1
+                room.chase_state['chaser_position'] = 3
+            elif offer == room.chase_state['offer_low']:
+                room.chase_state['contestant_position'] = 3
+                room.chase_state['chaser_position'] = 1
+            else:
+                room.chase_state['contestant_position'] = 2
+                room.chase_state['chaser_position'] = 2
+                
+            # Notify all players
+            await sio.emit('chase_game_start', {
+                'contestant_position': room.chase_state['contestant_position'],
+                'chaser_position': room.chase_state['chaser_position'],
+                'prize': room.chase_state['current_prize']
+            }, room=room_id)
+            
+        except Exception as e:
+            print(f"Error in chase_offer_selected: {e}")
+            
+    @sio.event
+    async def chase_answer(sid, data):
+        """Handle chase game answer submission."""
+        try:
+            room_id = data['room_id']
+            answer = data['answer']
+            if room_id not in rooms:
+                return
+                
+            room = rooms[room_id]
+            if room.current_game != 'chase':
+                return
+                
+            # Verify it's the right player's turn
+            is_chaser = sid == room.chaser
+            is_contestant = sid == room.chase_contestant
+            if not (is_chaser or is_contestant):
+                return
+                
+            current_question = room.chase_questions[0]
+            is_correct = answer == current_question['correct']
+            
+            # Update positions
+            if is_chaser:
+                if is_correct:
+                    room.chase_state['chaser_position'] += 1
+            else:  # contestant
+                if is_correct:
+                    room.chase_state['contestant_position'] += 1
+                    
+            # Check win/lose conditions
+            game_over = False
+            result = None
+            if room.chase_state['contestant_position'] >= room.chase_state['board_size']:
+                game_over = True
+                result = 'contestant_escaped'
+            elif room.chase_state['chaser_position'] >= room.chase_state['contestant_position']:
+                game_over = True
+                result = 'chaser_caught'
+                
+            # Remove used question
+            room.chase_questions.pop(0)
+            
+            # Load next question if game not over
+            next_question = None
+            if not game_over and room.chase_questions:
+                next_question = room.chase_questions[0]
+            elif not game_over:
+                # Load more questions
+                room.chase_questions = random.sample(
+                    CHASE_QUESTIONS[room.chase_category], 3)
+                next_question = room.chase_questions[0]
+                
+            # Notify all players
+            response = {
+                'player_type': 'chaser' if is_chaser else 'contestant',
+                'is_correct': is_correct,
+                'chaser_position': room.chase_state['chaser_position'],
+                'contestant_position': room.chase_state['contestant_position'],
+                'next_question': next_question if not game_over else None,
+                'game_over': game_over,
+                'result': result
+            }
+            
+            await sio.emit('chase_answer_result', response, room=room_id)
+            
+            # Handle game over
+            if game_over:
+                if result == 'contestant_escaped':
+                    # Award prize to contestant
+                    room.scores[room.chase_contestant] += room.chase_state['current_prize']
+                    
+                # Reset for next contestant
+                room.chase_contestant = None
+                room.chase_state['contestant_position'] = 0
+                room.chase_state['chaser_position'] = 0
+                
+                # Update all players with new scores
+                await sio.emit('scores_update', {
+                    'scores': room.scores,
+                    'players': [{
+                        'name': p['name'],
+                        'score': room.scores.get(sid, 0)
+                    } for sid, p in room.players.items() if not p.get('is_host')]
+                }, room=room_id)
+                
+        except Exception as e:
+            print(f"Error in chase_answer: {e}")
+
+    @sio.event
     async def disconnect(sid):
         """Handle client disconnection."""
         print(f"Client disconnected: {sid}")
@@ -282,6 +455,8 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             room_id = data['room_id']
             game_type = data['game_type']
 
+            print(f"Game {game_type} started in room {room_id}")
+
             if room_id not in rooms:
                 await sio.emit('game_error', {
                     'message': 'Room not found'
@@ -296,6 +471,78 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     'message': 'Only the host can start the game'
                 }, room=sid)
                 return
+                
+            # Get active players (excluding host)
+            active_players = [p_sid for p_sid, p in room.players.items() 
+                            if p['connected'] and not p.get('is_host')]
+            print(f"Active players: {len(active_players)}")
+
+            # Initialize game state
+            room.game_state = 'playing'
+            room.current_game = game_type
+            print(f"Game state: {room.game_state}")
+            print(f"Current game: {room.current_game}")
+
+            if game_type == 'chase':
+                # Select random chaser from active players
+                chaser_sid = random.choice(active_players)
+                room.chaser = chaser_sid
+                room.chase_contestant = None  # Will be set when first contestant starts
+                
+                # Select random category
+                room.chase_category = random.choice(list(CHASE_QUESTIONS.keys()))
+                print(f"Chase category: {room.chase_category}")
+                print(f"Chaser: {room.players[chaser_sid]['name']}")
+                
+                # Load initial questions
+                room.chase_questions = random.sample(CHASE_QUESTIONS[room.chase_category], 3)
+                print(f"Questions loaded: {len(room.chase_questions)}")
+                
+                # Reset chase state
+                room.chase_position = 0
+                room.chase_state = {
+                    'board_size': GAME_CONFIG['chase_board_size'],
+                    'chaser_position': 0,
+                    'contestant_position': 0,
+                    'safe_positions': [],
+                    'current_prize': 0,
+                    'offer_high': 0,
+                    'offer_low': 0,
+                    'time_pressure': False,
+                    'power_ups': {
+                        'double_steps': 1,
+                        'shield': 1,
+                        'time_freeze': 1
+                    }
+                }
+                
+                # Initialize scores
+                room.scores = {sid: 0 for sid in active_players}
+                
+                # Notify all players
+                for player_sid in room.players:
+                    if room.players[player_sid].get('connected'):
+                        await sio.emit('game_started', {
+                            'game_type': 'chase',
+                            'is_chaser': player_sid == chaser_sid,
+                            'chase_category': room.chase_category,
+                            'board_size': room.chase_state['board_size'],
+                            'time_limit': GAME_CONFIG['time_limits']['chase'],
+                            'game_state': room.game_state,
+                            'chaser_name': room.players[chaser_sid]['name'],
+                            'scores': room.scores,
+                            'players': [{
+                                'name': p['name'],
+                                'score': room.scores.get(sid, 0)
+                            } for sid, p in room.players.items() if not p.get('is_host')]
+                        }, room=player_sid)
+                
+                # Start background music
+                await sio.emit('play_music', {
+                    'track': 'chase',
+                    'volume': 0.4,
+                    'loop': True
+                }, room=room_id)
 
             # Check minimum player count
             active_players = sum(1 for p in room.players.values()
