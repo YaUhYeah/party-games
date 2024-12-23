@@ -49,12 +49,18 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
             print(f"Join room request: {data}")
 
+            # Create room if it doesn't exist and this is a host
+            if room_id not in rooms and is_host:
+                rooms[room_id] = GameRoom(room_id)
+                print(f"Created new room: {room_id}")
+
             # Validate room exists
             if room_id not in rooms:
                 print(f"Error: Room {room_id} not found")
                 await sio.emit('join_error', {
                     'message': 'Room not found or has expired. Please scan the QR code again.'
                 }, room=sid)
+                await sio.disconnect(sid)
                 return
 
             room = rooms[room_id]

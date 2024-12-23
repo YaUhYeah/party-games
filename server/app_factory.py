@@ -16,6 +16,7 @@ rooms: Dict[str, GameRoom] = {}
 def create_app():
     """Create and configure the application."""
     # Import here to avoid circular imports
+    import asyncio
     from server.database import init_db, Base, engine
     from server.routes import register_routes
     from server.sockets import register_socket_events
@@ -23,6 +24,9 @@ def create_app():
     # Initialize database
     Base.metadata.create_all(bind=engine)
     init_db()
+
+    # Initialize rooms dict with lock
+    rooms_lock = asyncio.Lock()
     # Create FastAPI app
     app = FastAPI(
         title="Party Games Hub",
@@ -133,16 +137,27 @@ def create_app():
     # Create background task for room cleanup
     async def cleanup_rooms(sid, environ):
         print(f"Client connected: {sid}")
-        # Clean up inactive rooms
-        for room_id in list(rooms.keys()):
-            room = rooms[room_id]
-            active_players = sum(1 for p in room.players.values() 
-                               if p.get('connected', False))
-            if active_players == 0:
-                print(f"Removing inactive room: {room_id}")
-                del rooms[room_id]
+        # Don't clean up rooms during connection, only periodically
+    
+    async def periodic_cleanup():
+        while True:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            print("Running periodic room cleanup")
+            for room_id in list(rooms.keys()):
+                room = rooms[room_id]
+                if not room.host_sid or not room.players.get(room.host_sid, {}).get('connected', False):
+                    active_players = sum(1 for p in room.players.values() 
+                                    if p.get('connected', False))
+                    if active_players == 0:
+                        print(f"Removing inactive room: {room_id}")
+                        del rooms[room_id]
     
     sio.on('connect', cleanup_rooms)
+    
+    # Start periodic cleanup task
+    @app.on_event("startup")
+    async def start_cleanup():
+        asyncio.create_task(periodic_cleanup())
 
     # Mount Socket.IO app
     socket_app = socketio.ASGIApp(

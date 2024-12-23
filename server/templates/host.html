@@ -337,16 +337,36 @@
                     timer: null,
                     scores: {},
 
+                    // Game timers
+                    timers: {
+                        trivia: null,
+                        drawing: null,
+                        chase: null
+                    },
+
                     // Initialize game state
                     init() {
                         this.socket = io({
                             query: { room_id: "{{ room_id }}", is_host: true },
-                            transports: ['websocket'],
-                            upgrade: false
+                            transports: ['websocket', 'polling'],
+                            upgrade: true
                         });
 
                         this.setupSocketEvents();
                         this.setupGameTimers();
+                    },
+
+                    // Set up game timers
+                    setupGameTimers() {
+                        // Clear any existing timers
+                        Object.values(this.timers).forEach(timer => {
+                            if (timer) clearInterval(timer);
+                        });
+
+                        // Initialize timer displays
+                        document.getElementById('triviaTimer').textContent = '';
+                        document.getElementById('drawingTimer').textContent = '';
+                        document.getElementById('chaseTimer').textContent = '';
                     },
 
                     // Set up socket event handlers
