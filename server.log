@@ -1,6 +1,26 @@
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
 INFO:     Will watch for changes in these directories: ['/workspace/party-games']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [441] using WatchFiles
+INFO:     Started reloader process [420] using WatchFiles
 Server initialized for asgi.
 
 Static directory structure:
@@ -11,13 +31,15 @@ static/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
 Server initialized for asgi.
 
@@ -29,22 +51,26 @@ static/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
-INFO:     Started server process [443]
+INFO:     Started server process [422]
 INFO:     Waiting for application startup.
+Socket.IO server started
 INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/models/game_room.py'. Reloading...
+WARNING:  WatchFiles detected changes in 'server/app_factory.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
+Socket.IO server shutting down
 INFO:     Application shutdown complete.
-INFO:     Finished server process [443]
+INFO:     Finished server process [422]
 Server initialized for asgi.
 
 Static directory structure:
@@ -55,13 +81,15 @@ static/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
 Server initialized for asgi.
 
@@ -73,347 +101,374 @@ static/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
-INFO:     Started server process [464]
+INFO:     Started server process [442]
 INFO:     Waiting for application startup.
+Socket.IO server started
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server/app_factory.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+Socket.IO server shutting down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [442]
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+INFO:     Started server process [462]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/openhands/poetry/openhands-ai-5O4_aCHf-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 693, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/openhands/poetry/openhands-ai-5O4_aCHf-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 569, in __aenter__
+    await self._router.startup()
+  File "/openhands/poetry/openhands-ai-5O4_aCHf-py3.12/lib/python3.12/site-packages/starlette/routing.py", line 670, in startup
+    await handler()
+  File "/workspace/party-games/server/app_factory.py", line 156, in start_cleanup
+    asyncio.create_task(periodic_cleanup())
+    ^^^^^^^
+NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'
+
+ERROR:    Application startup failed. Exiting.
+WARNING:  WatchFiles detected changes in 'server/app_factory.py'. Reloading...
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+INFO:     Started server process [467]
+INFO:     Waiting for application startup.
+Socket.IO server started
 INFO:     Application startup complete.
 WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
+Socket.IO server shutting down
 INFO:     Application shutdown complete.
-INFO:     Finished server process [464]
+INFO:     Finished server process [467]
 Server initialized for asgi.
 
 Static directory structure:
 static/
     manifest.json
+    icons/
+        icon-192.png
     qr/
     music/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
 Server initialized for asgi.
 
 Static directory structure:
 static/
     manifest.json
+    icons/
+        icon-192.png
     qr/
     music/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
-INFO:     Started server process [470]
+INFO:     Started server process [469]
 INFO:     Waiting for application startup.
+Socket.IO server started
 INFO:     Application startup complete.
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
 WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
+Socket.IO server shutting down
 INFO:     Application shutdown complete.
-INFO:     Finished server process [470]
+INFO:     Finished server process [469]
 Server initialized for asgi.
 
 Static directory structure:
 static/
     manifest.json
+    icons/
+        icon-192.png
     qr/
     music/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
 Server initialized for asgi.
 
 Static directory structure:
 static/
     manifest.json
+    icons/
+        icon-192.png
     qr/
     music/
         game_over.mp3
         trivia.mp3
         player_join.mp3
-        player_left.mp3
         round_start.mp3
         lobby.mp3
         drawing.mp3
+        chase.mp3
         wrong.mp3
         tick.mp3
         correct.mp3
-    profiles/
-INFO:     Started server process [474]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [474]
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-INFO:     Started server process [478]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [478]
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-INFO:     Started server process [483]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/config/game_config.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [483]
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-INFO:     Started server process [498]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-   wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-INFO:     Started server process [479]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [479]
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-INFO:     Started server process [482]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  WatchFiles detected changes in 'server/config/game_config.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [482]
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
-    profiles/
-Server initialized for asgi.
-
-Static directory structure:
-static/
-    manifest.json
-    qr/
-    music/
-        game_over.mp3
-        trivia.mp3
-        player_join.mp3
-        player_left.mp3
-        round_start.mp3
-        lobby.mp3
-        drawing.mp3
-        wrong.mp3
-        tick.mp3
-        correct.mp3
+        player_leave.mp3
+        error.mp3
     profiles/
 INFO:     Started server process [497]
 INFO:     Waiting for application startup.
+Socket.IO server started
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+Socket.IO server shutting down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [497]
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+INFO:     Started server process [499]
+INFO:     Waiting for application startup.
+Socket.IO server started
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server/sockets/__init__.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+Socket.IO server shutting down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [499]
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+Server initialized for asgi.
+
+Static directory structure:
+static/
+    manifest.json
+    icons/
+        icon-192.png
+    qr/
+    music/
+        game_over.mp3
+        trivia.mp3
+        player_join.mp3
+        round_start.mp3
+        lobby.mp3
+        drawing.mp3
+        chase.mp3
+        wrong.mp3
+        tick.mp3
+        correct.mp3
+        player_leave.mp3
+        error.mp3
+    profiles/
+INFO:     Started server process [501]
+INFO:     Waiting for application startup.
+Socket.IO server started
+INFO:     Application startup complete.
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup
+Running periodic room cleanup

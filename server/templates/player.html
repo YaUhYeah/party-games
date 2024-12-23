@@ -153,48 +153,49 @@
                                         class="w-32 h-32 mx-auto bg-white rounded-full shadow-inner cursor-crosshair touch-none"
                                         width="128" height="128"></canvas>
                                 
-                                <div class="drawing-tools flex justify-center mt-4 space-x-2">
+                                <div class="drawing-tools flex flex-col items-center mt-4 space-y-4">
                                     <!-- Color picker -->
-                                    <div class="color-picker flex space-x-1">
-                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                    <div class="color-picker flex space-x-2">
+                                        <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #000000"
-                                                data-color="#000000"></button>
-                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                onclick="window.gameState.setProfileColor('#000000')"></button>
+                                        <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #FF0000"
-                                                data-color="#FF0000"></button>
-                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                onclick="window.gameState.setProfileColor('#FF0000')"></button>
+                                        <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #00FF00"
-                                                data-color="#00FF00"></button>
-                                        <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                                onclick="window.gameState.setProfileColor('#00FF00')"></button>
+                                        <button class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 style="background-color: #0000FF"
-                                                data-color="#0000FF"></button>
+                                                onclick="window.gameState.setProfileColor('#0000FF')"></button>
                                     </div>
 
                                     <!-- Tool buttons -->
-                                    <div class="tool-buttons flex space-x-1">
-                                        <button class="tool-btn w-8 h-8 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-                                                data-tool="brush" title="Brush">
-                                            <i class="fas fa-paint-brush text-gray-600"></i>
+                                    <div class="tool-buttons flex space-x-2">
+                                        <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
+                                                onclick="window.gameState.setProfileTool('brush')" title="Brush">
+                                            <i class="fas fa-paint-brush text-gray-600 text-lg"></i>
                                         </button>
-                                        <button class="tool-btn w-8 h-8 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-                                                data-tool="eraser" title="Eraser">
-                                            <i class="fas fa-eraser text-gray-600"></i>
+                                        <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
+                                                onclick="window.gameState.setProfileTool('eraser')" title="Eraser">
+                                            <i class="fas fa-eraser text-gray-600 text-lg"></i>
                                         </button>
-                                        <button class="tool-btn w-8 h-8 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                                        <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                                                 onclick="window.gameState.clearProfileCanvas()" title="Clear">
-                                            <i class="fas fa-trash-alt text-gray-600"></i>
+                                            <i class="fas fa-trash-alt text-gray-600 text-lg"></i>
                                         </button>
                                     </div>
-                                </div>
 
-                                <!-- Size slider -->
-                                <div class="size-slider mt-4">
-                                    <input type="range" 
-                                           id="brushSize" 
-                                           min="1" 
-                                           max="20" 
-                                           value="4"
-                                           class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                    <!-- Size slider -->
+                                    <div class="size-slider w-full px-2">
+                                        <input type="range" 
+                                               id="profileBrushSize" 
+                                               min="1" 
+                                               max="20" 
+                                               value="4"
+                                               oninput="window.gameState.setProfileBrushSize(this.value)"
+                                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                    </div>
                                 </div>
 
                                 <div class="text-xs text-gray-500 text-center mt-2">
@@ -542,6 +543,149 @@
                     }
                 },
                 
+                // Profile drawing functionality
+                initProfileDrawing() {
+                    const canvas = document.getElementById('profileCanvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Set default styles
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    
+                    // Fill with white
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Create circular mask
+                    ctx.globalCompositeOperation = 'destination-in';
+                    ctx.beginPath();
+                    ctx.arc(canvas.width/2, canvas.height/2, canvas.width/2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalCompositeOperation = 'source-over';
+                    
+                    // Drawing state
+                    let isDrawing = false;
+                    let lastX = 0;
+                    let lastY = 0;
+                    
+                    // Get canvas-relative coordinates
+                    function getCoords(e) {
+                        const rect = canvas.getBoundingClientRect();
+                        const scaleX = canvas.width / rect.width;
+                        const scaleY = canvas.height / rect.height;
+                        
+                        if (e.touches) {
+                            return {
+                                x: (e.touches[0].clientX - rect.left) * scaleX,
+                                y: (e.touches[0].clientY - rect.top) * scaleY
+                            };
+                        }
+                        return {
+                            x: (e.clientX - rect.left) * scaleX,
+                            y: (e.clientY - rect.top) * scaleY
+                        };
+                    }
+                    
+                    // Drawing functions
+                    function startDrawing(e) {
+                        const coords = getCoords(e);
+                        isDrawing = true;
+                        [lastX, lastY] = [coords.x, coords.y];
+                    }
+                    
+                    function draw(e) {
+                        if (!isDrawing) return;
+                        e.preventDefault();
+                        
+                        const coords = getCoords(e);
+                        ctx.beginPath();
+                        ctx.moveTo(lastX, lastY);
+                        ctx.lineTo(coords.x, coords.y);
+                        ctx.stroke();
+                        
+                        [lastX, lastY] = [coords.x, coords.y];
+                    }
+                    
+                    function stopDrawing() {
+                        isDrawing = false;
+                    }
+                    
+                    // Event listeners
+                    canvas.addEventListener('mousedown', startDrawing);
+                    canvas.addEventListener('mousemove', draw);
+                    canvas.addEventListener('mouseup', stopDrawing);
+                    canvas.addEventListener('mouseout', stopDrawing);
+                    
+                    canvas.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        startDrawing(e);
+                    });
+                    
+                    canvas.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        draw(e);
+                    });
+                    
+                    canvas.addEventListener('touchend', stopDrawing);
+                    canvas.addEventListener('touchcancel', stopDrawing);
+                    
+                    // Store canvas context in window.gameState
+                    window.gameState.profileCtx = ctx;
+                },
+                
+                // Profile drawing tools
+                setProfileColor(color) {
+                    if (!window.gameState.profileCtx) return;
+                    window.gameState.profileCtx.strokeStyle = color;
+                    window.gameState.profileCtx.globalCompositeOperation = 'source-over';
+                    
+                    // Update UI
+                    document.querySelectorAll('.color-picker button').forEach(btn => {
+                        btn.classList.toggle('ring-2', btn.style.backgroundColor === color);
+                    });
+                },
+                
+                setProfileTool(tool) {
+                    if (!window.gameState.profileCtx) return;
+                    if (tool === 'eraser') {
+                        window.gameState.profileCtx.globalCompositeOperation = 'destination-out';
+                    } else {
+                        window.gameState.profileCtx.globalCompositeOperation = 'source-over';
+                    }
+                    
+                    // Update UI
+                    document.querySelectorAll('.tool-buttons button').forEach(btn => {
+                        btn.classList.toggle('ring-2', btn.getAttribute('title').toLowerCase() === tool);
+                    });
+                },
+                
+                setProfileBrushSize(size) {
+                    if (!window.gameState.profileCtx) return;
+                    window.gameState.profileCtx.lineWidth = size;
+                },
+                
+                clearProfileCanvas() {
+                    const canvas = document.getElementById('profileCanvas');
+                    const ctx = window.gameState.profileCtx;
+                    if (!ctx) return;
+                    
+                    // Clear canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Fill with white
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Create circular mask
+                    ctx.globalCompositeOperation = 'destination-in';
+                    ctx.beginPath();
+                    ctx.arc(canvas.width/2, canvas.height/2, canvas.width/2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalCompositeOperation = 'source-over';
+                },
+                
                 // Helper function to update player list
                 updatePlayerList(players) {
                     const playerList = document.getElementById('playerList');
@@ -603,6 +747,11 @@
                 this.initProfileDrawing();
                 this.addKeyboardListeners();
                 this.updateDebugInfo();
+                
+                // Set initial drawing state
+                this.setProfileColor('#000000');
+                this.setProfileTool('brush');
+                this.setProfileBrushSize(4);
                 
                 // Set up join button
                 const joinButton = document.getElementById('joinButton');
