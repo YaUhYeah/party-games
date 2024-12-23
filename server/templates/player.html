@@ -425,6 +425,9 @@
                 this.socket.on('join_confirmed', (data) => {
                     console.log('Join confirmed:', data);
                     
+                    // Reset joining state
+                    this.joiningInProgress = false;
+                    
                     // Hide join screen and show game area
                     document.getElementById('nameInput').classList.add('hidden');
                     document.getElementById('gameArea').classList.remove('hidden');
@@ -441,13 +444,30 @@
                     // Update game state
                     this.hasJoined = true;
                     this.roomId = data.room_id;
+                    this.playerId = data.player_id;
                     
                     // Update player list
                     if (data.current_players) {
                         this.updatePlayerList(data.current_players);
                     }
                     
-                    // Play join sound
+                    // Initialize game screens
+                    this.initGameScreens();
+                    
+                    // Play join sound and show welcome message
+                    playSound('player_join');
+                    this.showStatus('Successfully joined the game!', 'success');
+                    
+                    // Save successful join to localStorage
+                    localStorage.setItem('lastJoinedRoom', this.roomId);
+                    
+                    // Add reconnection handling
+                    window.addEventListener('online', () => {
+                        if (this.hasJoined && !this.socket.connected) {
+                            this.showStatus('Reconnecting...', 'info');
+                            this.socket.connect();
+                        }
+                    });
                     playSound('player_join');
                     this.updatePlayerList(data.current_players);
                 });
@@ -480,67 +500,253 @@
                 // Initialize chase game board
                 initChaseBoard(size) {
                     const board = document.getElementById('chaseBoard');
+                    if (!board) {
+                        console.error('Chase board element not found');
+                        return;
+                    }
+                    
                     board.innerHTML = '';
                     board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+                    board.className = 'grid gap-2 w-full max-w-2xl mx-auto my-4';
                     
                     for (let i = 0; i < size; i++) {
                         const cell = document.createElement('div');
                         cell.id = `chase-cell-${i}`;
-                        cell.className = 'aspect-square rounded-lg transition-all duration-300';
+                        cell.className = 'aspect-square rounded-lg transition-all duration-300 shadow-md';
                         
-                        // Add cell content
+                        // Add cell content and hover effects
                         if (i === 0) {
-                            cell.className += ' bg-red-500'; // Start position
+                            cell.className += ' bg-red-500 hover:bg-red-600'; // Start position
+                            cell.innerHTML = '<i class="fas fa-flag-checkered text-white"></i>';
                         } else if (i === size - 1) {
-                            cell.className += ' bg-green-500'; // End position
+                            cell.className += ' bg-green-500 hover:bg-green-600'; // End position
+                            cell.innerHTML = '<i class="fas fa-trophy text-white"></i>';
                         } else {
-                            cell.className += ' bg-gray-700'; // Regular position
+                            cell.className += ' bg-gray-700 hover:bg-gray-600'; // Regular position
                         }
                         
                         board.appendChild(cell);
                     }
+                    
+                    // Add board legend
+                    const legend = document.createElement('div');
+                    legend.className = 'flex justify-center items-center space-x-4 text-sm mt-4';
+                    legend.innerHTML = `
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 rounded bg-red-600 mr-2"></div>
+                            <span>Chaser</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 rounded bg-blue-500 mr-2"></div>
+                            <span>Contestant</span>
+                        </div>
+                    `;
+                    board.parentNode.appendChild(legend);
                 },
                 
                 // Handle chase answer submission
                 submitChaseAnswer(answerIndex) {
-                    if (!this.socket) return;
+                    if (!this.socket || this.answerSubmitted) return;
                     
+                    this.answerSubmitted = true;
                     this.socket.emit('chase_answer', {
                         room_id: this.roomId,
                         answer: answerIndex
                     });
                     
-                    // Disable all answer buttons
+                    // Disable all answer buttons and show loading state
                     const options = document.getElementById('chaseOptions');
-                    Array.from(options.children).forEach(button => {
-                        button.disabled = true;
-                        button.classList.add('opacity-50');
-                    });
+                    if (options) {
+                        Array.from(options.children).forEach((button, index) => {
+                            button.disabled = true;
+                            if (index === answerIndex) {
+                                button.classList.add('ring-2', 'ring-indigo-500', 'opacity-75');
+                            } else {
+                                button.classList.add('opacity-50');
+                            }
+                        });
+                    }
+                    
+                    // Show answer submitted message
+                    const statusDiv = document.getElementById('chaseStatus');
+                    if (statusDiv) {
+                        statusDiv.innerHTML += '<div class="text-sm text-indigo-600 mt-2">Answer submitted, waiting for other player...</div>';
+                    }
                 },
                 
-                // Update chase board positions
+                // Update chase board positions with animations
                 updateChasePositions(data) {
                     const board = document.getElementById('chaseBoard');
                     if (!board) return;
                     
-                    // Reset all cells
+                    // Reset all cells with transition
                     Array.from(board.children).forEach(cell => {
-                        cell.className = 'aspect-square rounded-lg transition-all duration-300 bg-gray-700';
+                        cell.className = 'aspect-square rounded-lg transition-all duration-300 bg-gray-700 hover:bg-gray-600';
+                        cell.innerHTML = '';
                     });
                     
                     // Update start and end positions
-                    board.children[0].className = 'aspect-square rounded-lg transition-all duration-300 bg-red-500';
-                    board.children[board.children.length - 1].className = 'aspect-square rounded-lg transition-all duration-300 bg-green-500';
+                    const startCell = board.children[0];
+                    const endCell = board.children[board.children.length - 1];
+                    startCell.className = 'aspect-square rounded-lg transition-all duration-300 bg-red-500 hover:bg-red-600';
+                    endCell.className = 'aspect-square rounded-lg transition-all duration-300 bg-green-500 hover:bg-green-600';
+                    startCell.innerHTML = '<i class="fas fa-flag-checkered text-white"></i>';
+                    endCell.innerHTML = '<i class="fas fa-trophy text-white"></i>';
                     
-                    // Update chaser position
-                    if (data.chaser_position > 0) {
-                        board.children[data.chaser_position].className = 'aspect-square rounded-lg transition-all duration-300 bg-red-600';
+                    // Animate chaser position
+                    if (data.chaser_position >= 0) {
+                        const chaserCell = board.children[data.chaser_position];
+                        chaserCell.className = 'aspect-square rounded-lg transition-all duration-300 bg-red-600 hover:bg-red-700 transform scale-110';
+                        chaserCell.innerHTML = '<i class="fas fa-running text-white transform -scale-x-100"></i>';
                     }
                     
-                    // Update contestant position
-                    if (data.contestant_position > 0) {
-                        board.children[data.contestant_position].className = 'aspect-square rounded-lg transition-all duration-300 bg-blue-500';
+                    // Animate contestant position
+                    if (data.contestant_position >= 0) {
+                        const contestantCell = board.children[data.contestant_position];
+                        contestantCell.className = 'aspect-square rounded-lg transition-all duration-300 bg-blue-500 hover:bg-blue-600 transform scale-110';
+                        contestantCell.innerHTML = '<i class="fas fa-running text-white"></i>';
                     }
+                    
+                    // Update game status
+                    const statusDiv = document.getElementById('chaseStatus');
+                    if (statusDiv) {
+                        let status = '';
+                        const distance = data.chaser_position - data.contestant_position;
+                        
+                        if (distance === 1) {
+                            status = '<div class="text-red-500 font-bold">The Chaser is right behind you!</div>';
+                        } else if (distance > 1) {
+                            status = `<div class="text-blue-500">You are ${distance} steps ahead of the Chaser</div>`;
+                        }
+                        
+                        if (status) {
+                            statusDiv.innerHTML += `<div class="mt-2">${status}</div>`;
+                        }
+                    }
+                },
+                
+                // Setup trivia question
+                setupTriviaQuestion(question) {
+                    const questionText = document.getElementById('questionText');
+                    const answerOptions = document.getElementById('answerOptions');
+                    if (!questionText || !answerOptions) return;
+                    
+                    // Update question text
+                    questionText.textContent = question.text;
+                    
+                    // Clear previous options
+                    answerOptions.innerHTML = '';
+                    
+                    // Add answer buttons
+                    question.options.forEach((option, index) => {
+                        const button = document.createElement('button');
+                        button.className = 'w-full p-4 text-left bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all transform hover:scale-[1.01] active:scale-[0.99]';
+                        button.innerHTML = `
+                            <div class="flex items-center">
+                                <span class="text-indigo-600 font-bold mr-3">${String.fromCharCode(65 + index)}.</span>
+                                <span>${option}</span>
+                            </div>
+                        `;
+                        button.onclick = () => this.submitAnswer(index);
+                        answerOptions.appendChild(button);
+                    });
+                    
+                    // Reset answer state
+                    this.answerSubmitted = false;
+                },
+                
+                // Setup chase game
+                setupChaseGame(data) {
+                    this.isChaser = data.is_chaser;
+                    const chaseInfo = document.getElementById('chaseInfo');
+                    if (chaseInfo) {
+                        chaseInfo.innerHTML = `
+                            <div class="text-xl font-bold mb-2">
+                                ${data.is_chaser ? 'You are the Chaser!' : 'You are a Contestant!'}
+                            </div>
+                            <div class="text-gray-600">
+                                Category: ${data.category || 'General Knowledge'}
+                            </div>
+                        `;
+                    }
+                    
+                    // Initialize board
+                    this.initChaseBoard(data.board_size || 7);
+                    
+                    // Reset game state
+                    this.answerSubmitted = false;
+                },
+                
+                // Show answer result
+                showAnswerResult(data) {
+                    const feedback = document.getElementById('triviaFeedback');
+                    if (!feedback) return;
+                    
+                    // Show appropriate feedback
+                    feedback.classList.remove('hidden');
+                    const correctFeedback = feedback.querySelector('.correct-feedback');
+                    const wrongFeedback = feedback.querySelector('.wrong-feedback');
+                    
+                    if (data.correct) {
+                        correctFeedback.classList.remove('hidden');
+                        wrongFeedback.classList.add('hidden');
+                    } else {
+                        correctFeedback.classList.add('hidden');
+                        wrongFeedback.classList.remove('hidden');
+                    }
+                    
+                    // Hide feedback after delay
+                    setTimeout(() => {
+                        feedback.classList.add('hidden');
+                    }, 2000);
+                },
+                
+                // Show game results
+                showGameResults(data) {
+                    // Create results overlay
+                    const overlay = document.createElement('div');
+                    overlay.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+                    overlay.innerHTML = `
+                        <div class="bg-white rounded-xl p-8 max-w-md w-11/12 transform transition-all">
+                            <h2 class="text-2xl font-bold text-center mb-6">Game Over!</h2>
+                            <div class="space-y-4">
+                                ${data.winner ? `
+                                    <div class="text-center text-xl font-medium">
+                                        Winner: ${data.winner}
+                                    </div>
+                                ` : ''}
+                                <div class="bg-gray-100 rounded-lg p-4">
+                                    <h3 class="font-semibold mb-2">Final Scores</h3>
+                                    <div class="space-y-2">
+                                        ${Object.entries(data.scores || {})
+                                            .sort(([,a], [,b]) => b - a)
+                                            .map(([name, score]) => `
+                                                <div class="flex justify-between items-center">
+                                                    <span class="font-medium">${name}</span>
+                                                    <span class="text-gray-600">${score} points</span>
+                                                </div>
+                                            `).join('')}
+                                    </div>
+                                </div>
+                                <button onclick="location.reload()" 
+                                        class="w-full bg-indigo-600 text-white p-4 rounded-lg hover:bg-indigo-700 transition-all">
+                                    Play Again
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(overlay);
+                },
+                
+                // Disable answer buttons
+                disableAnswerButtons() {
+                    const options = document.getElementById('answerOptions');
+                    if (!options) return;
+                    
+                    Array.from(options.children).forEach(button => {
+                        button.disabled = true;
+                        button.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
                 },
                 
                 // Profile drawing functionality
@@ -695,58 +901,147 @@
                     players.forEach(player => {
                         const div = document.createElement('div');
                         div.className = 'flex justify-between items-center p-2 bg-white rounded-lg shadow-sm';
-                        div.innerHTML = `
-                            <div class="flex items-center space-x-2">
-                                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                                    <span class="text-indigo-600 font-medium">${player.name[0].toUpperCase()}</span>
-                                </div>
-                                <span class="font-medium">${player.name}</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-gray-500">${player.score || 0} points</span>
-                                ${player.is_chaser ? '<span class="text-red-500">(Chaser)</span>' : ''}
-                            </div>
-                        `;
+                        
+                        // Create player info section
+                        const playerInfo = document.createElement('div');
+                        playerInfo.className = 'flex items-center space-x-2';
+                        
+                        // Profile picture or initial
+                        const profilePic = document.createElement('div');
+                        if (player.profile_picture) {
+                            profilePic.className = 'w-8 h-8 rounded-full bg-indigo-100 overflow-hidden';
+                            const img = document.createElement('img');
+                            img.src = player.profile_picture;
+                            img.className = 'w-full h-full object-cover';
+                            profilePic.appendChild(img);
+                        } else {
+                            profilePic.className = 'w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center';
+                            profilePic.innerHTML = `<span class="text-indigo-600 font-medium">${player.name[0].toUpperCase()}</span>`;
+                        }
+                        playerInfo.appendChild(profilePic);
+                        
+                        // Player name
+                        const nameSpan = document.createElement('span');
+                        nameSpan.className = 'font-medium';
+                        nameSpan.textContent = player.name;
+                        playerInfo.appendChild(nameSpan);
+                        
+                        div.appendChild(playerInfo);
+                        
+                        // Create stats section
+                        const statsDiv = document.createElement('div');
+                        statsDiv.className = 'flex items-center space-x-2';
+                        
+                        // Score
+                        const scoreSpan = document.createElement('span');
+                        scoreSpan.className = 'text-gray-500';
+                        scoreSpan.textContent = `${player.score || 0} points`;
+                        statsDiv.appendChild(scoreSpan);
+                        
+                        // Role indicator (if any)
+                        if (player.is_chaser) {
+                            const roleSpan = document.createElement('span');
+                            roleSpan.className = 'text-red-500';
+                            roleSpan.textContent = '(Chaser)';
+                            statsDiv.appendChild(roleSpan);
+                        } else if (player.is_drawer) {
+                            const roleSpan = document.createElement('span');
+                            roleSpan.className = 'text-blue-500';
+                            roleSpan.textContent = '(Drawing)';
+                            statsDiv.appendChild(roleSpan);
+                        }
+                        
+                        div.appendChild(statsDiv);
                         playerList.appendChild(div);
                     });
-                };
-                });
-
-                this.socket.on('player_left', (data) => {
-                    console.log('Player left:', data);
-                    this.updatePlayerList(data.players);
-                    if (data.disconnected_player) {
-                        this.showStatus(`${data.disconnected_player} left the game`, 'info');
+                },
+                
+                // Load saved profile from localStorage
+                loadSavedProfile() {
+                    const savedPicture = localStorage.getItem('lastProfilePicture');
+                    const savedName = localStorage.getItem('lastPlayerName');
+                    
+                    if (savedName) {
+                        const nameInput = document.getElementById('playerName');
+                        if (nameInput) nameInput.value = savedName;
                     }
+                    
+                    if (savedPicture) {
+                        const canvas = document.getElementById('profileCanvas');
+                        if (canvas) {
+                            const ctx = canvas.getContext('2d');
+                            const img = new Image();
+                            img.onload = () => {
+                                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                ctx.drawImage(img, 0, 0);
+                            };
+                            img.src = savedPicture;
+                        }
+                    }
+                },
+
+            // Show status messages
+            showStatus(message, type = 'info', duration = 3000) {
+                const statusMessages = document.getElementById('statusMessages');
+                if (!statusMessages) return;
+                
+                const colors = {
+                    success: 'bg-green-500',
+                    error: 'bg-red-500',
+                    info: 'bg-indigo-500',
+                    warning: 'bg-yellow-500'
+                };
+                
+                const alert = document.createElement('div');
+                alert.className = `${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 opacity-0 translate-y-2`;
+                alert.textContent = message;
+                
+                statusMessages.appendChild(alert);
+                
+                // Trigger animation
+                requestAnimationFrame(() => {
+                    alert.classList.remove('opacity-0', 'translate-y-2');
                 });
+                
+                // Remove after duration
+                setTimeout(() => {
+                    alert.classList.add('opacity-0', 'translate-y-2');
+                    setTimeout(() => {
+                        statusMessages.removeChild(alert);
+                    }, 300);
+                }, duration);
             },
-
-            // Update player list
-            updatePlayerList(players) {
-                const playerList = document.getElementById('playerList');
-                if (!playerList) return;
-
-                playerList.innerHTML = '';
-                players.forEach(player => {
-                    const playerDiv = document.createElement('div');
-                    playerDiv.className = 'flex items-center justify-between p-2 bg-white rounded-lg shadow-sm';
-                    playerDiv.innerHTML = `
-                        <span class="font-medium">${player.name}</span>
-                        <span class="text-gray-500">Score: ${player.score}</span>
-                    `;
-                    playerList.appendChild(playerDiv);
-                });
+            
+            // Play sound effects
+            playSound(soundName) {
+                const audio = new Audio(`/static/music/${soundName}.mp3`);
+                audio.volume = 0.5;
+                audio.play().catch(error => console.warn('Error playing sound:', error));
             },
-
+            
             // Initialize the game
             init() {
                 console.log('Initializing game with room ID:', this.roomId);
+                
+                // Initialize state
+                this.joiningInProgress = false;
+                this.answerSubmitted = false;
+                this.currentGame = null;
+                this.isChaser = false;
+                this.isDrawer = false;
+                this.hasJoined = false;
                 
                 // Initialize core components
                 this.initSocket();
                 this.initProfileDrawing();
                 this.addKeyboardListeners();
                 this.updateDebugInfo();
+                
+                // Check for existing session
+                const lastJoinedRoom = localStorage.getItem('lastJoinedRoom');
+                if (lastJoinedRoom === this.roomId) {
+                    this.showStatus('Reconnecting to previous session...', 'info');
+                }
                 
                 // Set initial drawing state
                 this.setProfileColor('#000000');
@@ -767,6 +1062,8 @@
 
             // Join the game
             async joinGame() {
+                if (this.joiningInProgress) return;
+                
                 const playerName = document.getElementById('playerName').value.trim();
                 if (!playerName) {
                     this.showStatus('Please enter your name', 'error');
@@ -784,17 +1081,35 @@
                 joinButton.disabled = true;
                 joinText.classList.add('hidden');
                 loadingSpinner.classList.remove('hidden');
+                
+                this.joiningInProgress = true;
 
                 try {
+                    // Save profile for future use
+                    localStorage.setItem('lastProfilePicture', profilePicture);
+                    localStorage.setItem('lastPlayerName', playerName);
+                    
                     // Emit join event
-                    await this.socket.emit('join_room', {
+                    this.socket.emit('join_room', {
                         room_id: this.roomId,
                         player_name: playerName,
                         profile_picture: profilePicture
                     });
+                    
+                    // Start a timeout to reset the button if no response
+                    setTimeout(() => {
+                        if (this.joiningInProgress) {
+                            this.joiningInProgress = false;
+                            joinButton.disabled = false;
+                            joinText.classList.remove('hidden');
+                            loadingSpinner.classList.add('hidden');
+                            this.showStatus('Join request timed out. Please try again.', 'error');
+                        }
+                    }, 10000); // 10 second timeout
                 } catch (error) {
                     console.error('Join error:', error);
                     this.showStatus(error.message || 'Failed to join game', 'error');
+                    this.joiningInProgress = false;
                     joinButton.disabled = false;
                     joinText.classList.remove('hidden');
                     loadingSpinner.classList.add('hidden');
@@ -846,12 +1161,78 @@
                 }
 
                 // Socket event handlers for games
+                // Game state updates
                 this.socket.on('game_state', (data) => {
                     console.log('Game state update:', data);
-                    if (data.game_state === 'playing') {
-                        this.handleGameStarted(data);
+                    this.currentGame = data.game_type;
+                    
+                    // Hide all game screens first
+                    ['welcomeScreen', 'triviaScreen', 'chaseScreen', 'drawingScreen'].forEach(screen => {
+                        const element = document.getElementById(screen);
+                        if (element) element.classList.add('hidden');
+                    });
+                    
+                    if (data.game_state === 'waiting') {
+                        // Show welcome screen
+                        document.getElementById('welcomeScreen').classList.remove('hidden');
+                        this.showStatus('Waiting for other players...', 'info');
+                        
+                    } else if (data.game_state === 'playing') {
+                        // Show appropriate game screen
+                        if (data.game_type === 'trivia') {
+                            document.getElementById('triviaScreen').classList.remove('hidden');
+                            this.setupTriviaQuestion(data.question);
+                            
+                        } else if (data.game_type === 'chase') {
+                            document.getElementById('chaseScreen').classList.remove('hidden');
+                            this.setupChaseGame(data);
+                            
+                        } else if (data.game_type === 'drawing') {
+                            document.getElementById('drawingScreen').classList.remove('hidden');
+                            this.setupDrawingGame(data);
+                        }
+                        
+                        // Play game start sound
+                        this.playSound('round_start');
+                        
                     } else if (data.game_state === 'complete') {
-                        this.handleGameComplete(data);
+                        // Show game results
+                        this.showGameResults(data);
+                        
+                        // Play game over sound
+                        this.playSound('game_over');
+                    }
+                    
+                    // Update debug info
+                    this.updateDebugInfo();
+                });
+                
+                // Game-specific events
+                this.socket.on('question_timeout', () => {
+                    this.showStatus('Time\'s up!', 'warning');
+                    this.playSound('error');
+                    this.disableAnswerButtons();
+                });
+                
+                this.socket.on('answer_result', (data) => {
+                    this.showAnswerResult(data);
+                    this.playSound(data.correct ? 'correct' : 'wrong');
+                });
+                
+                this.socket.on('chase_update', (data) => {
+                    this.updateChasePositions(data);
+                    if (data.caught) {
+                        this.showStatus('The Chaser caught up!', 'error');
+                        this.playSound('error');
+                    } else if (data.escaped) {
+                        this.showStatus('Successfully escaped!', 'success');
+                        this.playSound('correct');
+                    }
+                });
+                
+                this.socket.on('drawing_update', (data) => {
+                    if (!this.isDrawer) {
+                        this.updateDrawingCanvas(data.drawing);
                     }
                 });
 
