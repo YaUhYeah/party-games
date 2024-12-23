@@ -423,10 +423,31 @@
                 // Game events
                 this.socket.on('join_confirmed', (data) => {
                     console.log('Join confirmed:', data);
+                    
+                    // Hide join screen and show game area
                     document.getElementById('nameInput').classList.add('hidden');
                     document.getElementById('gameArea').classList.remove('hidden');
                     document.getElementById('welcomeScreen').classList.remove('hidden');
+                    
+                    // Reset join button state
+                    const joinButton = document.getElementById('joinButton');
+                    const joinText = joinButton.querySelector('.join-text');
+                    const loadingSpinner = joinButton.querySelector('.loading-spinner');
+                    joinButton.disabled = false;
+                    joinText.classList.remove('hidden');
+                    loadingSpinner.classList.add('hidden');
+                    
+                    // Update game state
                     this.hasJoined = true;
+                    this.roomId = data.room_id;
+                    
+                    // Update player list
+                    if (data.current_players) {
+                        this.updatePlayerList(data.current_players);
+                    }
+                    
+                    // Play join sound
+                    playSound('player_join');
                     this.updatePlayerList(data.current_players);
                 });
 
@@ -454,6 +475,72 @@
                         this.updateScores(data.scores);
                     }
                 });
+                
+                // Initialize chase game board
+                initChaseBoard(size) {
+                    const board = document.getElementById('chaseBoard');
+                    board.innerHTML = '';
+                    board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+                    
+                    for (let i = 0; i < size; i++) {
+                        const cell = document.createElement('div');
+                        cell.id = `chase-cell-${i}`;
+                        cell.className = 'aspect-square rounded-lg transition-all duration-300';
+                        
+                        // Add cell content
+                        if (i === 0) {
+                            cell.className += ' bg-red-500'; // Start position
+                        } else if (i === size - 1) {
+                            cell.className += ' bg-green-500'; // End position
+                        } else {
+                            cell.className += ' bg-gray-700'; // Regular position
+                        }
+                        
+                        board.appendChild(cell);
+                    }
+                },
+                
+                // Handle chase answer submission
+                submitChaseAnswer(answerIndex) {
+                    if (!this.socket) return;
+                    
+                    this.socket.emit('chase_answer', {
+                        room_id: this.roomId,
+                        answer: answerIndex
+                    });
+                    
+                    // Disable all answer buttons
+                    const options = document.getElementById('chaseOptions');
+                    Array.from(options.children).forEach(button => {
+                        button.disabled = true;
+                        button.classList.add('opacity-50');
+                    });
+                },
+                
+                // Update chase board positions
+                updateChasePositions(data) {
+                    const board = document.getElementById('chaseBoard');
+                    if (!board) return;
+                    
+                    // Reset all cells
+                    Array.from(board.children).forEach(cell => {
+                        cell.className = 'aspect-square rounded-lg transition-all duration-300 bg-gray-700';
+                    });
+                    
+                    // Update start and end positions
+                    board.children[0].className = 'aspect-square rounded-lg transition-all duration-300 bg-red-500';
+                    board.children[board.children.length - 1].className = 'aspect-square rounded-lg transition-all duration-300 bg-green-500';
+                    
+                    // Update chaser position
+                    if (data.chaser_position > 0) {
+                        board.children[data.chaser_position].className = 'aspect-square rounded-lg transition-all duration-300 bg-red-600';
+                    }
+                    
+                    // Update contestant position
+                    if (data.contestant_position > 0) {
+                        board.children[data.contestant_position].className = 'aspect-square rounded-lg transition-all duration-300 bg-blue-500';
+                    }
+                },
                 
                 // Helper function to update player list
                 updatePlayerList(players) {
@@ -715,6 +802,70 @@
                     });
                 });
 
+                // Chase game events
+                this.socket.on('chase_question', (data) => {
+                    const questionEl = document.getElementById('chaseQuestion');
+                    const optionsEl = document.getElementById('chaseOptions');
+                    
+                    // Update question
+                    questionEl.textContent = data.question;
+                    
+                    // Update options
+                    optionsEl.innerHTML = '';
+                    data.options.forEach((option, index) => {
+                        const button = document.createElement('button');
+                        button.className = 'w-full p-4 text-left bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors';
+                        button.innerHTML = `
+                            <span class="inline-block w-8 h-8 mr-3 text-center leading-8 bg-indigo-100 text-indigo-700 rounded-full font-bold">
+                                ${String.fromCharCode(65 + index)}
+                            </span>
+                            ${option}
+                        `;
+                        button.onclick = () => this.submitChaseAnswer(index);
+                        optionsEl.appendChild(button);
+                    });
+                    
+                    // Start timer
+                    if (data.time_limit) {
+                        this.startTimer(data.time_limit);
+                    }
+                });
+                
+                this.socket.on('chase_answer_result', (data) => {
+                    // Show feedback
+                    const feedback = document.getElementById('chaseFeedback');
+                    const correct = feedback.querySelector('.correct-feedback');
+                    const wrong = feedback.querySelector('.wrong-feedback');
+                    
+                    feedback.classList.remove('hidden');
+                    if (data.is_correct) {
+                        correct.classList.remove('hidden');
+                        wrong.classList.add('hidden');
+                        playSound('correct');
+                    } else {
+                        correct.classList.add('hidden');
+                        wrong.classList.remove('hidden');
+                        playSound('wrong');
+                    }
+                    
+                    // Update positions
+                    this.updateChasePositions(data);
+                    
+                    // Show next question if available
+                    if (data.next_question) {
+                        setTimeout(() => {
+                            feedback.classList.add('hidden');
+                            this.socket.emit('ready_for_question', {
+                                room_id: this.roomId
+                            });
+                        }, 2000);
+                    }
+                });
+                
+                this.socket.on('chase_game_over', (data) => {
+                    this.showGameResults(data);
+                });
+                
                 this.socket.on('game_complete', (data) => {
                     console.log('Game complete:', data);
                     this.showGameResults(data);
