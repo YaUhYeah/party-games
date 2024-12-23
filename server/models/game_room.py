@@ -671,14 +671,28 @@ class GameRoom:
 
     def validate_game_state(self) -> None:
         """Validate and maintain game state consistency."""
-        if self.game_state not in ['waiting', 'playing', 'chase_setup', 'chase_question']:
+        valid_states = ['waiting', 'playing', 'chase_setup', 'chase_question', 'complete']
+        if self.game_state not in valid_states:
             self.game_state = 'waiting'
-            
-        if self.current_game and self.game_state == 'waiting':
+
+        # Check for active players
+        active_players = sum(1 for p in self.players.values() if p.get('connected', False) and not p.get('is_host', False))
+        min_players = GAME_CONFIG['game_modes'].get(self.current_game, {}).get('min_players', 2)
+
+        # Reset game if not enough players
+        if active_players < min_players and self.game_state != 'waiting':
+            self.game_state = 'waiting'
             self.current_game = None
-            
+            return
+
+        # Handle game completion
         if self.round > self.total_rounds:
             self.game_state = 'complete'
+            return
+
+        # Reset incomplete games in waiting state
+        if self.current_game and self.game_state == 'waiting':
+            self.current_game = None
             
         # Validate player states
         for pid in list(self.players.keys()):

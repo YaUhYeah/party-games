@@ -560,6 +560,15 @@
                 }
 
                 // Socket event handlers for games
+                this.socket.on('game_state', (data) => {
+                    console.log('Game state update:', data);
+                    if (data.game_state === 'playing') {
+                        this.handleGameStarted(data);
+                    } else if (data.game_state === 'complete') {
+                        this.handleGameComplete(data);
+                    }
+                });
+
                 this.socket.on('game_started', (data) => {
                     console.log('Game started:', data);
                     this.currentGame = data.game_type;
@@ -1271,6 +1280,133 @@
 
                 this.setupSocketListeners();
                 this.socket.connect();  // Manual connection
+            },
+
+            handleGameStarted(data) {
+                // Hide welcome screen and show game screen
+                document.getElementById('welcomeScreen').classList.add('hidden');
+                document.getElementById('gameArea').classList.remove('hidden');
+                
+                // Hide all game screens first
+                document.getElementById('triviaScreen')?.classList.add('hidden');
+                document.getElementById('chaseScreen')?.classList.add('hidden');
+                document.getElementById('drawingScreen')?.classList.add('hidden');
+                
+                // Show appropriate game screen
+                if (data.game_type === 'trivia') {
+                    document.getElementById('triviaScreen').classList.remove('hidden');
+                    document.getElementById('questionText').textContent = data.question.question;
+                    const options = document.getElementById('answerOptions');
+                    options.innerHTML = '';
+                    data.question.options.forEach(option => {
+                        const button = document.createElement('button');
+                        button.className = 'w-full p-4 text-left bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+                        button.textContent = option;
+                        button.onclick = () => this.submitAnswer(option);
+                        options.appendChild(button);
+                    });
+                } else if (data.game_type === 'chase') {
+                    document.getElementById('chaseScreen').classList.remove('hidden');
+                    this.isChaser = data.is_chaser;
+                    document.getElementById('chaseRole').textContent = data.is_chaser ? 'You are the Chaser!' : 'You are the Contestant!';
+                    document.getElementById('chaseStatus').textContent = `Category: ${data.chase_category}`;
+                    this.initChaseBoard(data.board_size);
+                } else if (data.game_type === 'chinese_whispers') {
+                    document.getElementById('drawingScreen').classList.remove('hidden');
+                    this.isDrawer = data.is_drawer;
+                    if (data.is_drawer) {
+                        document.getElementById('drawingWord').textContent = `Draw: ${data.word}`;
+                        document.getElementById('drawingTurn').textContent = 'Your turn to draw!';
+                        this.initDrawingCanvas();
+                    } else {
+                        document.getElementById('drawingWord').textContent = 'Waiting for drawing...';
+                        document.getElementById('drawingTurn').textContent = 'Watch the drawing and guess the word';
+                    }
+                }
+                
+                // Update scores if available
+                if (data.scores) {
+                    this.updateScores(data.scores);
+                }
+                
+                // Start timer if provided
+                if (data.time_limit) {
+                    this.startTimer(data.time_limit);
+                }
+            },
+
+            updateScores(scores) {
+                const scoresList = document.getElementById('scoresList');
+                if (!scoresList) {
+                    const gameArea = document.getElementById('gameArea');
+                    const scoresDiv = document.createElement('div');
+                    scoresDiv.id = 'scoresList';
+                    scoresDiv.className = 'fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg';
+                    gameArea.appendChild(scoresDiv);
+                }
+                
+                const scoresList = document.getElementById('scoresList');
+                scoresList.innerHTML = '<h3 class="font-bold mb-2">Scores</h3>';
+                Object.entries(scores)
+                    .sort(([,a], [,b]) => b - a)
+                    .forEach(([playerId, score]) => {
+                        const player = this.players.find(p => p.id === playerId) || { name: 'Unknown' };
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center mb-1';
+                        div.innerHTML = `
+                            <span class="mr-4">${player.name}</span>
+                            <span class="font-mono">${score}</span>
+                        `;
+                        scoresList.appendChild(div);
+                    });
+            },
+
+            startTimer(seconds) {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                }
+                
+                const timerElement = document.getElementById('timer');
+                if (!timerElement) {
+                    const gameArea = document.getElementById('gameArea');
+                    const timerDiv = document.createElement('div');
+                    timerDiv.id = 'timer';
+                    timerDiv.className = 'fixed top-4 left-4 bg-white p-4 rounded-lg shadow-lg text-2xl font-bold';
+                    gameArea.appendChild(timerDiv);
+                }
+                
+                let timeLeft = seconds;
+                const updateTimer = () => {
+                    const timerElement = document.getElementById('timer');
+                    if (!timerElement) return;
+                    
+                    timerElement.textContent = timeLeft;
+                    if (timeLeft <= 5) {
+                        timerElement.classList.add('text-red-500');
+                        // Play tick sound if available
+                        if (this.sounds?.tick) {
+                            this.sounds.tick.play();
+                        }
+                    }
+                    
+                    if (timeLeft <= 0) {
+                        clearInterval(this.timerInterval);
+                        // Play time up sound if available
+                        if (this.sounds?.timeUp) {
+                            this.sounds.timeUp.play();
+                        }
+                        // Auto-submit current answer/drawing if needed
+                        if (this.currentGame === 'trivia' && !this.hasSubmitted) {
+                            this.submitAnswer(null);
+                        } else if (this.currentGame === 'chinese_whispers' && this.isDrawer) {
+                            this.submitDrawing();
+                        }
+                    }
+                    timeLeft--;
+                };
+                
+                updateTimer();
+                this.timerInterval = setInterval(updateTimer, 1000);
             },
 
             generateClientId() {

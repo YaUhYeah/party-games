@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any
 
 import socketio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -13,14 +13,37 @@ from server.models.game_room import GameRoom
 # Global state
 rooms: Dict[str, GameRoom] = {}
 
-def create_app() -> socketio.ASGIApp:
+def create_app():
     """Create and configure the application."""
+    # Import here to avoid circular imports
+    from server.database import init_db, Base, engine
+    from server.routes import register_routes
+    from server.sockets import register_socket_events
+
+    # Initialize database
+    Base.metadata.create_all(bind=engine)
+    init_db()
     # Create FastAPI app
     app = FastAPI(
         title="Party Games Hub",
         description="A collection of fun multiplayer party games",
-        version="1.0.0"
+        version="1.0.0",
+        docs_url=None,  # Disable docs in production
+        redoc_url=None  # Disable redoc in production
     )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):
+        print(f"Global exception handler caught: {exc}")
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error": "An unexpected error occurred. Please try again.",
+                "show_refresh": True
+            },
+            status_code=500
+        )
 
     # Configure CORS
     app.add_middleware(
@@ -46,7 +69,9 @@ def create_app() -> socketio.ASGIApp:
         reconnection_delay_max=5000,
         allow_upgrades=True,  # Allow WebSocket upgrades
         http_compression=True,  # Enable compression
-        transports=['websocket', 'polling']  # Prefer WebSocket
+        transports=['websocket', 'polling'],  # Prefer WebSocket
+        async_handlers=True,  # Enable async handlers
+        json=True  # Enable JSON serialization
     )
 
     # Set up static files and templates
@@ -80,22 +105,66 @@ def create_app() -> socketio.ASGIApp:
             print(f"{subindent}{f}")
 
     # Add static files to templates context
-    templates.env.globals["static_url"] = "/static"
+    templates.env.globals.update({
+        "static_url": "/static",
+        "request": None  # Will be overridden in route handlers
+    })
 
-    # Import and register routes and socket events
-    from server.routes import register_routes
-    from server.sockets import register_socket_events
+    # Add root route
+    @app.get("/")
+    async def root(request: Request):
+        """Serve the main page."""
+        try:
+            return templates.TemplateResponse("index.html", {"request": request})
+        except Exception as e:
+            print(f"Error serving index page: {e}")
+            return templates.TemplateResponse("error.html", {
+                "request": request,
+                "error": "An error occurred loading the page. Please try again.",
+                "show_refresh": True
+            })
 
+    # Register routes and socket events
     register_routes(app, templates, rooms)
     register_socket_events(sio, rooms)
 
-    # Create Socket.IO app
+    # Add startup and shutdown handlers
+    @app.on_event("startup")
+    async def startup_event():
+        print("Socket.IO server started")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        print("Socket.IO server shutting down")
+
+    # Create background task for room cleanup
+    async def cleanup_rooms(sid, environ):
+        print(f"Client connected: {sid}")
+        # Clean up inactive rooms
+        for room_id in list(rooms.keys()):
+            room = rooms[room_id]
+            active_players = sum(1 for p in room.players.values() 
+                               if p.get('connected', False))
+            if active_players == 0:
+                print(f"Removing inactive room: {room_id}")
+                del rooms[room_id]
+    
+    sio.on('connect', cleanup_rooms)
+
+    # Mount Socket.IO app
     socket_app = socketio.ASGIApp(
-        sio,
-        app,
-        static_files={
-            '/': {'content_type': 'text/html', 'filename': 'index.html'}
-        }
+        socketio_server=sio,
+        other_asgi_app=app,
+        socketio_path='socket.io'
     )
+
+    # Add startup and shutdown handlers
+    @app.on_event("startup")
+    async def startup_event():
+        print("Socket.IO server started")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        print("Socket.IO server shutting down")
 
     return socket_app
