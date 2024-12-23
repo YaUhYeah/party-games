@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any
 
 import socketio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -107,7 +107,16 @@ def create_app() -> socketio.ASGIApp:
     # Add root route
     @app.get("/")
     async def root(request: Request):
-        return templates.TemplateResponse("index.html", {"request": request})
+        """Serve the main page."""
+        try:
+            return templates.TemplateResponse("index.html", {"request": request})
+        except Exception as e:
+            print(f"Error serving index page: {e}")
+            return templates.TemplateResponse("error.html", {
+                "request": request,
+                "error": "An error occurred loading the page. Please try again.",
+                "show_refresh": True
+            })
 
     # Import and register routes and socket events
     from server.routes import register_routes
@@ -132,10 +141,11 @@ def create_app() -> socketio.ASGIApp:
 
     # Create Socket.IO app with enhanced error handling
     socket_app = socketio.ASGIApp(
-        sio,
-        app,
+        socketio_server=sio,
+        other_asgi_app=app,
         socketio_path='socket.io',
-        other_asgi_app=app
+        on_startup=[lambda: print("Socket.IO server started")],
+        on_shutdown=[lambda: print("Socket.IO server shutting down")]
     )
 
     # Add startup and shutdown handlers
