@@ -88,23 +88,79 @@
                 <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="text-center">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Join Info -->
+                <div class="text-center lg:col-span-1">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
                     <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4">
                     <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
                 </div>
 
-                <div>
+                <!-- Middle Column: Game Display -->
+                <div class="lg:col-span-1">
+                    <div id="gameDisplay" class="bg-gray-900 rounded-xl p-6 text-white min-h-[400px] relative overflow-hidden">
+                        <!-- Waiting State -->
+                        <div id="waitingState" class="text-center py-12">
+                            <h3 class="text-2xl font-bold mb-4">Waiting to Start</h3>
+                            <p class="text-gray-400">Select a game mode when ready</p>
+                        </div>
+
+                        <!-- Chase Game State -->
+                        <div id="chaseState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">The Chase</h3>
+                                <p id="chaseStatus" class="text-gray-400"></p>
+                            </div>
+                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
+                                <!-- Chase board positions will be added here -->
+                            </div>
+                            <div id="chaseQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
+                                <p class="text-lg font-medium"></p>
+                            </div>
+                            <div id="chaseTimer" class="text-xl font-bold text-center"></div>
+                        </div>
+
+                        <!-- Trivia Game State -->
+                        <div id="triviaState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">Trivia Time</h3>
+                                <p id="triviaRound" class="text-gray-400"></p>
+                            </div>
+                            <div id="triviaQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
+                                <p class="text-lg font-medium"></p>
+                            </div>
+                            <div id="triviaAnswers" class="grid grid-cols-2 gap-4">
+                                <!-- Answer stats will be shown here -->
+                            </div>
+                            <div id="triviaTimer" class="text-xl font-bold text-center mt-4"></div>
+                        </div>
+
+                        <!-- Drawing Game State -->
+                        <div id="drawingState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">Chinese Whispers</h3>
+                                <p id="drawingTurn" class="text-gray-400"></p>
+                            </div>
+                            <div id="drawingDisplay" class="bg-white rounded-lg aspect-video mb-4">
+                                <!-- Drawing will be shown here -->
+                            </div>
+                            <div id="drawingWord" class="text-center text-xl font-bold"></div>
+                            <div id="drawingTimer" class="text-xl font-bold text-center mt-4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Players -->
+                <div class="lg:col-span-1">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
-                    <div id="playerList" class="player-list p-4 min-h-[200px] space-y-3">
+                    <div id="playerList" class="player-list p-4 min-h-[400px] space-y-3">
                         <div class="flex items-center justify-between">
                             <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
                             <div class="text-sm text-gray-500" id="minPlayersStatus">
                                 Need 2+ players to start
                             </div>
                         </div>
-                        <div id="playerGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div id="playerGrid" class="grid grid-cols-1 gap-3">
                             <!-- Players will be added here dynamically -->
                         </div>
                         <div id="emptyState" class="text-center py-8">

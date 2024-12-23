@@ -218,7 +218,7 @@
             </div>
 
             <!-- Game Area -->
-            <div id="gameArea" class="hidden p-4">
+            <div id="gameArea" class="hidden">
                 <!-- Welcome Screen -->
                 <div id="welcomeScreen" class="text-center py-8">
                     <h2 class="text-3xl font-bold text-indigo-600 mb-4">Welcome to Party Games!</h2>
@@ -236,8 +236,24 @@
                     <div class="max-w-2xl mx-auto">
                         <div class="bg-white rounded-xl shadow-lg p-6">
                             <div id="questionText" class="text-xl font-semibold mb-6"></div>
-                            <div id="answerOptions" class="space-y-4"></div>
-                            <div id="timer" class="mt-4 text-center"></div>
+                            <div id="answerOptions" class="grid grid-cols-1 gap-4">
+                                <!-- Answer buttons will be added here -->
+                            </div>
+                            <div id="timer" class="mt-4 text-center text-2xl font-bold"></div>
+                            <div id="triviaFeedback" class="mt-4 text-center hidden">
+                                <div class="correct-feedback text-green-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Correct!</p>
+                                </div>
+                                <div class="wrong-feedback text-red-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Wrong!</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -245,11 +261,32 @@
                 <div id="chaseScreen" class="hidden">
                     <div class="max-w-2xl mx-auto">
                         <div class="bg-white rounded-xl shadow-lg p-6">
-                            <div id="chaseInfo" class="text-center mb-4"></div>
-                            <div id="chaseBoard" class="mb-6"></div>
+                            <div id="chaseInfo" class="text-center mb-4">
+                                <div id="chaseRole" class="text-xl font-bold mb-2"></div>
+                                <div id="chaseStatus" class="text-gray-600"></div>
+                            </div>
+                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
+                                <!-- Board positions will be added here -->
+                            </div>
                             <div id="chaseQuestion" class="text-xl font-semibold mb-6"></div>
-                            <div id="chaseOptions" class="space-y-4"></div>
-                            <div id="chaseTimer" class="mt-4 text-center"></div>
+                            <div id="chaseOptions" class="grid grid-cols-1 gap-4">
+                                <!-- Answer buttons will be added here -->
+                            </div>
+                            <div id="chaseTimer" class="mt-4 text-center text-2xl font-bold"></div>
+                            <div id="chaseFeedback" class="mt-4 text-center hidden">
+                                <div class="catch-feedback text-red-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Caught!</p>
+                                </div>
+                                <div class="escape-feedback text-green-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Escaped!</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -257,11 +294,58 @@
                 <div id="drawingScreen" class="hidden">
                     <div class="max-w-2xl mx-auto">
                         <div class="bg-white rounded-xl shadow-lg p-6">
-                            <div id="drawingPrompt" class="text-center mb-4"></div>
+                            <div id="drawingPrompt" class="text-center mb-4">
+                                <div id="drawingWord" class="text-2xl font-bold mb-2"></div>
+                                <div id="drawingTurn" class="text-gray-600"></div>
+                            </div>
                             <canvas id="drawingCanvas" class="drawing-canvas border-2 border-gray-200 rounded-lg mb-4"></canvas>
-                            <div id="drawingTools" class="flex justify-center space-x-4"></div>
-                            <div id="drawingTimer" class="mt-4 text-center"></div>
+                            <div id="drawingTools" class="grid grid-cols-4 gap-4 mb-4">
+                                <div class="col-span-3 grid grid-cols-3 gap-2">
+                                    <!-- Color buttons -->
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #000000" data-color="#000000"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #FF0000" data-color="#FF0000"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #00FF00" data-color="#00FF00"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #0000FF" data-color="#0000FF"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #FFFF00" data-color="#FFFF00"></button>
+                                    <button class="color-btn w-10 h-10 rounded-full border-2 border-gray-300" style="background-color: #FF00FF" data-color="#FF00FF"></button>
+                                </div>
+                                <div class="tool-buttons grid grid-cols-1 gap-2">
+                                    <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300" data-tool="brush">
+                                        <i class="fas fa-paint-brush"></i>
+                                    </button>
+                                    <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300" data-tool="eraser">
+                                        <i class="fas fa-eraser"></i>
+                                    </button>
+                                    <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300" onclick="clearCanvas()">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="brush-size flex items-center space-x-2">
+                                    <input type="range" id="brushSize" min="1" max="20" value="4" class="w-32">
+                                    <span id="brushSizeValue" class="text-sm">4px</span>
+                                </div>
+                                <div id="drawingTimer" class="text-2xl font-bold"></div>
+                            </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Game Feedback -->
+                <div id="gameFeedback" class="fixed inset-0 bg-black/80 hidden items-center justify-center">
+                    <div class="bg-white rounded-xl p-8 max-w-md w-11/12 text-center">
+                        <div id="feedbackIcon" class="mb-4">
+                            <!-- Icon will be added here -->
+                        </div>
+                        <h3 id="feedbackTitle" class="text-2xl font-bold mb-2"></h3>
+                        <p id="feedbackMessage" class="text-gray-600 mb-4"></p>
+                        <div id="feedbackStats" class="grid grid-cols-2 gap-4 mb-6">
+                            <!-- Stats will be added here -->
+                        </div>
+                        <button id="feedbackButton" class="bg-indigo-600 text-white px-6 py-3 rounded-lg w-full">
+                            Continue
+                        </button>
                     </div>
                 </div>
             </div>
@@ -275,6 +359,9 @@
             roomId: "{{ room_id }}",
             hasJoined: false,
             debugVisible: false,
+            currentGame: null,
+            isDrawer: false,
+            isChaser: false,
             debugState: {
                 socketConnected: false,
                 lastError: null,
@@ -302,6 +389,119 @@
                 
                 // Load saved profile if exists
                 this.loadSavedProfile();
+
+                // Initialize game screens
+                this.initGameScreens();
+            },
+
+            // Initialize game screens and event handlers
+            initGameScreens() {
+                // Socket event handlers for games
+                this.socket.on('game_started', (data) => {
+                    console.log('Game started:', data);
+                    this.currentGame = data.game_type;
+                    
+                    // Hide welcome screen and show game screen
+                    document.getElementById('welcomeScreen').classList.add('hidden');
+                    document.getElementById('gameArea').classList.remove('hidden');
+                    
+                    // Show appropriate game screen
+                    if (data.game_type === 'trivia') {
+                        document.getElementById('triviaScreen').classList.remove('hidden');
+                        document.getElementById('questionText').textContent = data.question.question;
+                        const options = document.getElementById('answerOptions');
+                        options.innerHTML = '';
+                        data.question.options.forEach(option => {
+                            const button = document.createElement('button');
+                            button.className = 'w-full p-4 text-left bg-white border-2 border-gray-200 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500';
+                            button.textContent = option;
+                            button.onclick = () => this.submitAnswer(option);
+                            options.appendChild(button);
+                        });
+                    } else if (data.game_type === 'chase') {
+                        document.getElementById('chaseScreen').classList.remove('hidden');
+                        this.isChaser = data.is_chaser;
+                        document.getElementById('chaseRole').textContent = data.is_chaser ? 'You are the Chaser!' : 'You are the Contestant!';
+                        document.getElementById('chaseStatus').textContent = `Category: ${data.chase_category}`;
+                        this.initChaseBoard(data.board_size);
+                    } else if (data.game_type === 'chinese_whispers') {
+                        document.getElementById('drawingScreen').classList.remove('hidden');
+                        this.isDrawer = data.is_drawer;
+                        if (data.is_drawer) {
+                            document.getElementById('drawingWord').textContent = `Draw: ${data.word}`;
+                            document.getElementById('drawingTurn').textContent = 'Your turn to draw!';
+                            this.initDrawingCanvas();
+                        } else {
+                            document.getElementById('drawingWord').textContent = 'Waiting for drawing...';
+                            document.getElementById('drawingTurn').textContent = 'Watch the drawing and guess the word';
+                        }
+                    }
+                });
+
+                this.socket.on('receive_drawing', (data) => {
+                    if (!this.isDrawer) {
+                        this.displayDrawing(data.drawing);
+                    }
+                });
+
+                this.socket.on('next_player', (data) => {
+                    document.getElementById('drawingTurn').textContent = `${data.player}'s turn`;
+                });
+
+                this.socket.on('round_complete', (data) => {
+                    this.showFeedback({
+                        title: 'Round Complete!',
+                        message: `The word was: ${data.original_word}`,
+                        stats: {
+                            'Final Guess': data.final_guess,
+                            'Your Score': data.scores[this.socket.id] || 0
+                        }
+                    });
+                });
+
+                this.socket.on('game_complete', (data) => {
+                    const isWinner = data.winner === this.socket.id;
+                    this.showFeedback({
+                        title: isWinner ? 'You Won!' : 'Game Over',
+                        message: isWinner ? 'Congratulations!' : 'Better luck next time!',
+                        stats: {
+                            'Your Score': data.final_scores[this.socket.id] || 0,
+                            'Best Score': Math.max(...Object.values(data.final_scores))
+                        }
+                    });
+                });
+            },
+
+            // Show feedback overlay
+            showFeedback(data) {
+                const feedback = document.getElementById('gameFeedback');
+                const title = document.getElementById('feedbackTitle');
+                const message = document.getElementById('feedbackMessage');
+                const stats = document.getElementById('feedbackStats');
+                const button = document.getElementById('feedbackButton');
+
+                title.textContent = data.title;
+                message.textContent = data.message;
+                
+                stats.innerHTML = '';
+                Object.entries(data.stats).forEach(([key, value]) => {
+                    const stat = document.createElement('div');
+                    stat.className = 'bg-gray-50 p-3 rounded-lg';
+                    stat.innerHTML = `
+                        <div class="text-sm text-gray-500">${key}</div>
+                        <div class="text-lg font-bold">${value}</div>
+                    `;
+                    stats.appendChild(stat);
+                });
+
+                feedback.classList.remove('hidden');
+                feedback.classList.add('flex');
+
+                button.onclick = () => {
+                    feedback.classList.add('hidden');
+                    feedback.classList.remove('flex');
+                };
+            },
             },
             
             showStatus(message, type = 'info') {
