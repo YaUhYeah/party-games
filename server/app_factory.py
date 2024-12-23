@@ -89,13 +89,28 @@ def create_app() -> socketio.ASGIApp:
     register_routes(app, templates, rooms)
     register_socket_events(sio, rooms)
 
-    # Create Socket.IO app
+    # Create background task for room cleanup
+    @sio.on('connect')
+    async def connect(sid, environ):
+        print(f"Client connected: {sid}")
+        # Clean up inactive rooms
+        for room_id in list(rooms.keys()):
+            room = rooms[room_id]
+            active_players = sum(1 for p in room.players.values() 
+                               if p.get('connected', False))
+            if active_players == 0:
+                print(f"Removing inactive room: {room_id}")
+                del rooms[room_id]
+
+    # Create Socket.IO app with enhanced error handling
     socket_app = socketio.ASGIApp(
         sio,
         app,
         static_files={
             '/': {'content_type': 'text/html', 'filename': 'index.html'}
-        }
+        },
+        on_startup=[lambda: print("Socket.IO server started")],
+        on_shutdown=[lambda: print("Socket.IO server shutting down")]
     )
 
     return socket_app

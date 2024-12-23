@@ -292,8 +292,12 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             room.current_game = game_type
             room.game_state = 'playing'
             room.round = 1
+            room.total_rounds = GAME_CONFIG['rounds_per_game']
             room.scores = {sid: 0 for sid, player in room.players.items() if not player.get('is_host')}
             room.round_start_time = datetime.now()
+            room.player_answers = {}  # Reset answers
+            room.player_streaks = {}  # Reset streaks
+            room.drawings = []  # Reset drawings
 
             # Set up game-specific state
             if game_type == 'chinese_whispers':
@@ -318,7 +322,9 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                                 'word': room.current_word if is_drawer else None,
                                 'time_limit': GAME_CONFIG['time_limits']['drawing'][
                                     '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
-                                ]
+                                ],
+                                'current_player': room.players[room.player_order[0]]['name'],
+                                'game_state': 'playing'
                             }, room=player_sid)
                     
                     print(f"Chinese Whispers game started with word: {room.current_word}")
@@ -339,8 +345,14 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     'question': room.current_question,
                     'time_limit': GAME_CONFIG['time_limits']['trivia'][
                         '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
-                    ]
+                    ],
+                    'game_state': 'playing',
+                    'scores': room.scores,
+                    'players': [{'name': p['name'], 'score': room.scores.get(sid, 0)} 
+                              for sid, p in room.players.items() if not p.get('is_host')]
                 }, room=room_id)
+                
+                print(f"Trivia game started with question: {room.current_question['question']}")
 
             elif game_type == 'chase':
                 # Select random chaser
@@ -364,7 +376,12 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                             'board_size': room.chase_state['board_size'],
                             'time_limit': GAME_CONFIG['time_limits']['chase'][
                                 '2' if active_players == 2 else '3+'
-                            ]
+                            ],
+                            'game_state': 'playing',
+                            'chaser_name': room.players[room.chaser]['name'],
+                            'scores': room.scores,
+                            'players': [{'name': p['name'], 'score': room.scores.get(sid, 0)} 
+                                      for sid, p in room.players.items() if not p.get('is_host')]
                         }, room=player_sid)
 
             # Start background music
@@ -554,7 +571,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             room.player_answers[sid] = answer
 
             # Calculate score
-            is_correct = answer == room.current_question['correct_answer']
+            is_correct = answer == room.current_question['correct']
             score_result = room.calculate_score(sid, is_correct, answer_time)
             room.scores[sid] = room.scores.get(sid, 0) + score_result['total_score']
 
@@ -598,6 +615,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                         'time_limit': GAME_CONFIG['time_limits']['trivia'][
                             '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
                         ]
+                    }, room=room_id)
                     }, room=room_id)
 
         except Exception as e:
