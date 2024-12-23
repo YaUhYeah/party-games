@@ -63,8 +63,8 @@ def create_app():
     sio = socketio.AsyncServer(
         async_mode='asgi',
         cors_allowed_origins='*',
-        ping_timeout=60,  # Increased timeout for mobile networks
-        ping_interval=25,
+        ping_timeout=60000,  # Increased timeout for mobile networks (in ms)
+        ping_interval=25000,  # Ping interval in ms
         max_http_buffer_size=1e8,  # 100MB max message size
         logger=True,
         engineio_logger=True,
@@ -74,9 +74,9 @@ def create_app():
         reconnection_delay_max=5000,
         allow_upgrades=True,  # Allow WebSocket upgrades
         http_compression=True,  # Enable compression
-        transports=['websocket', 'polling'],  # Prefer WebSocket
+        transports=['websocket', 'polling'],  # Support both WebSocket and polling
         async_handlers=True,  # Enable async handlers
-        json=True  # Enable JSON serialization
+        json=None  # Use default JSON serializer
     )
 
     # Set up static files
