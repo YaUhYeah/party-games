@@ -616,7 +616,6 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                             '2-3' if active_players <= 3 else '4-6' if active_players <= 6 else '7+'
                         ]
                     }, room=room_id)
-                    }, room=room_id)
 
         except Exception as e:
             print(f"Error submitting answer: {e}")

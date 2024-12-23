@@ -90,8 +90,7 @@ def create_app() -> socketio.ASGIApp:
     register_socket_events(sio, rooms)
 
     # Create background task for room cleanup
-    @sio.on('connect')
-    async def connect(sid, environ):
+    async def cleanup_rooms(sid, environ):
         print(f"Client connected: {sid}")
         # Clean up inactive rooms
         for room_id in list(rooms.keys()):
@@ -101,6 +100,8 @@ def create_app() -> socketio.ASGIApp:
             if active_players == 0:
                 print(f"Removing inactive room: {room_id}")
                 del rooms[room_id]
+    
+    sio.on('connect', cleanup_rooms)
 
     # Create Socket.IO app with enhanced error handling
     socket_app = socketio.ASGIApp(
