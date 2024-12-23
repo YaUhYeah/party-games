@@ -16,6 +16,7 @@ rooms: Dict[str, GameRoom] = {}
 def create_app():
     """Create and configure the application."""
     # Import here to avoid circular imports
+    import asyncio
     from server.database import init_db, Base, engine
     from server.routes import register_routes
     from server.sockets import register_socket_events
@@ -23,6 +24,9 @@ def create_app():
     # Initialize database
     Base.metadata.create_all(bind=engine)
     init_db()
+
+    # Initialize rooms dict with lock
+    rooms_lock = asyncio.Lock()
     # Create FastAPI app
     app = FastAPI(
         title="Party Games Hub",
@@ -31,6 +35,11 @@ def create_app():
         docs_url=None,  # Disable docs in production
         redoc_url=None  # Disable redoc in production
     )
+
+    # Initialize templates early for exception handler
+    SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+    TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request, exc):
@@ -58,8 +67,8 @@ def create_app():
     sio = socketio.AsyncServer(
         async_mode='asgi',
         cors_allowed_origins='*',
-        ping_timeout=60,  # Increased timeout for mobile networks
-        ping_interval=25,
+        ping_timeout=60000,  # Increased timeout for mobile networks (in ms)
+        ping_interval=25000,  # Ping interval in ms
         max_http_buffer_size=1e8,  # 100MB max message size
         logger=True,
         engineio_logger=True,
@@ -69,15 +78,13 @@ def create_app():
         reconnection_delay_max=5000,
         allow_upgrades=True,  # Allow WebSocket upgrades
         http_compression=True,  # Enable compression
-        transports=['websocket', 'polling'],  # Prefer WebSocket
+        transports=['websocket', 'polling'],  # Support both WebSocket and polling
         async_handlers=True,  # Enable async handlers
-        json=True  # Enable JSON serialization
+        json=None  # Use default JSON serializer
     )
 
-    # Set up static files and templates
-    SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+    # Set up static files
     STATIC_DIR = os.path.join(SERVER_DIR, "static")
-    TEMPLATES_DIR = os.path.join(SERVER_DIR, "templates")
 
     # Create necessary directories with proper permissions
     def ensure_dir(path):
@@ -92,7 +99,6 @@ def create_app():
 
     # Mount static files
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
     # Print static directory structure for debugging
     print("\nStatic directory structure:")
@@ -128,28 +134,30 @@ def create_app():
     register_routes(app, templates, rooms)
     register_socket_events(sio, rooms)
 
-    # Add startup and shutdown handlers
-    @app.on_event("startup")
-    async def startup_event():
-        print("Socket.IO server started")
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        print("Socket.IO server shutting down")
-
     # Create background task for room cleanup
     async def cleanup_rooms(sid, environ):
         print(f"Client connected: {sid}")
-        # Clean up inactive rooms
-        for room_id in list(rooms.keys()):
-            room = rooms[room_id]
-            active_players = sum(1 for p in room.players.values() 
-                               if p.get('connected', False))
-            if active_players == 0:
-                print(f"Removing inactive room: {room_id}")
-                del rooms[room_id]
+        # Don't clean up rooms during connection, only periodically
+    
+    async def periodic_cleanup():
+        while True:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            print("Running periodic room cleanup")
+            for room_id in list(rooms.keys()):
+                room = rooms[room_id]
+                if not room.host_sid or not room.players.get(room.host_sid, {}).get('connected', False):
+                    active_players = sum(1 for p in room.players.values() 
+                                    if p.get('connected', False))
+                    if active_players == 0:
+                        print(f"Removing inactive room: {room_id}")
+                        del rooms[room_id]
     
     sio.on('connect', cleanup_rooms)
+    
+    # Start periodic cleanup task
+    @app.on_event("startup")
+    async def start_cleanup():
+        asyncio.create_task(periodic_cleanup())
 
     # Mount Socket.IO app
     socket_app = socketio.ASGIApp(

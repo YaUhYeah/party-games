@@ -337,31 +337,71 @@
                     timer: null,
                     scores: {},
 
+                    // Game timers
+                    timers: {
+                        trivia: null,
+                        drawing: null,
+                        chase: null
+                    },
+
                     // Initialize game state
                     init() {
                         this.socket = io({
                             query: { room_id: "{{ room_id }}", is_host: true },
-                            transports: ['websocket'],
-                            upgrade: false
+                            transports: ['websocket', 'polling'],
+                            upgrade: true
                         });
 
                         this.setupSocketEvents();
                         this.setupGameTimers();
                     },
 
+                    // Set up game timers
+                    setupGameTimers() {
+                        // Clear any existing timers
+                        Object.values(this.timers).forEach(timer => {
+                            if (timer) clearInterval(timer);
+                        });
+
+                        // Initialize timer displays
+                        document.getElementById('triviaTimer').textContent = '';
+                        document.getElementById('drawingTimer').textContent = '';
+                        document.getElementById('chaseTimer').textContent = '';
+                    },
+
                     // Set up socket event handlers
+                    initChaseBoard(size) {
+                        const board = document.getElementById('chaseBoard');
+                        board.innerHTML = '';
+                        board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+                        
+                        for (let i = 0; i < size; i++) {
+                            const cell = document.createElement('div');
+                            cell.className = 'bg-gray-800 rounded-lg aspect-square';
+                            cell.id = `chase-cell-${i}`;
+                            board.appendChild(cell);
+                        }
+                    },
+
                     setupSocketEvents() {
                         this.socket.on('game_started', (data) => {
                             console.log('Game started:', data);
                             this.currentGame = data.game_type;
-                            this.round = data.round;
-                            this.totalRounds = data.total_rounds;
+                            this.gameState = data.game_state;
 
                             // Hide all game states
                             document.getElementById('waitingState').classList.add('hidden');
                             document.getElementById('chaseState').classList.add('hidden');
                             document.getElementById('triviaState').classList.add('hidden');
                             document.getElementById('drawingState').classList.add('hidden');
+
+                            // Show appropriate game state
+                            if (this.currentGame === 'chase') {
+                                document.getElementById('chaseState').classList.remove('hidden');
+                                document.getElementById('chaseStatus').textContent = 
+                                    `Category: ${data.chase_category}`;
+                                this.initChaseBoard(data.board_size);
+                            }
 
                             // Show appropriate game state
                             if (data.game_type === 'chase') {
@@ -488,10 +528,61 @@
                     },
 
                     showGameResults(data) {
-                        const winner = data.winner;
-                        const scores = data.final_scores;
-                        // Show game results overlay
-                        // TODO: Implement results display
+                        // Create results overlay
+                        const overlay = document.createElement('div');
+                        overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+                        
+                        const content = document.createElement('div');
+                        content.className = 'bg-white rounded-xl p-8 max-w-2xl w-11/12 transform transition-all';
+                        
+                        // Build results content
+                        let resultsHTML = `
+                            <h2 class="text-3xl font-bold text-center mb-6">${data.title || 'Game Results'}</h2>
+                            <div class="space-y-6">
+                        `;
+                        
+                        // Add game-specific results
+                        if (this.currentGame === 'chase') {
+                            resultsHTML += `
+                                <div class="text-center text-xl mb-4">
+                                    ${data.chaser_won ? 
+                                        'The Chaser has caught all contestants!' :
+                                        'Some contestants have escaped with their prize money!'}
+                                </div>
+                                <div class="grid gap-4">
+                                    ${Object.entries(data.final_scores)
+                                        .sort(([,a], [,b]) => b - a)
+                                        .map(([player, score]) => `
+                                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                                <span class="font-medium">${player}</span>
+                                                <span class="text-lg">${score} points</span>
+                                            </div>
+                                        `).join('')}
+                                </div>
+                            `;
+                        }
+                        
+                        // Add continue button
+                        resultsHTML += `
+                            </div>
+                            <div class="mt-8 flex justify-center">
+                                <button onclick="this.closest('.fixed').remove()" 
+                                        class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                                    Continue
+                                </button>
+                            </div>
+                        `;
+                        
+                        content.innerHTML = resultsHTML;
+                        overlay.appendChild(content);
+                        document.body.appendChild(overlay);
+                        
+                        // Play appropriate sound
+                        if (data.chaser_won) {
+                            playMusic('game_over');
+                        } else {
+                            playMusic('victory');
+                        }
                     }
                 };
 
