@@ -1,0 +1,34 @@
+{
+    "name": "Party Games Hub",
+    "short_name": "PartyGames",
+    "description": "Fun party games for TV and mobile devices",
+    "start_url": "/",
+    "display": "fullscreen",
+    "background_color": "#000000",
+    "theme_color": "#4F46E5",
+    "icons": [
+        {
+            "src": "/static/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/static/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ],
+    "tv_app": true,
+    "supported_devices": [
+        "chromecast",
+        "airplay",
+        "samsung-tv",
+        "lg-tv",
+        "roku",
+        "fire-tv"
+    ],
+    "cast_receiver_id": "YOUR_CHROMECAST_APP_ID",
+    "airplay_identifier": "com.partygames.tv",
+    "samsung_tv_channel": "party-games-hub",
+    "orientation": "landscape"
+}

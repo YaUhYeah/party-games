@@ -7,6 +7,18 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+    <!-- Amazon Fire TV Support -->
+    <script src="https://resources.amazonwebapps.com/v1/latest/Amazon-Web-App-API.min.js"></script>
+    <!-- DIAL Protocol Support for Fire TV -->
+    <script src="https://www.amazonwebapps.com/scripts/dial.js"></script>
+    <!-- AirPlay support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-tv-app-capable" content="yes">
+    <!-- Smart TV support -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="samsung-tv-app" content="true">
     <style>
         /* TV Mode Styles */
         .tv-mode {
@@ -76,30 +88,457 @@
                 <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="text-center">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Join Info -->
+                <div class="text-center lg:col-span-1">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
-                    <img id="qrCode" src="/static/qr_{{ room_id }}.png" alt="QR Code" class="mb-4">
+                    <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4">
+                    <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
                 </div>
 
-                <div>
+                <!-- Middle Column: Game Display -->
+                <div class="lg:col-span-1">
+                    <div id="gameDisplay" class="bg-gray-900 rounded-xl p-6 text-white min-h-[400px] relative overflow-hidden">
+                        <!-- Waiting State -->
+                        <div id="waitingState" class="text-center py-12">
+                            <h3 class="text-2xl font-bold mb-4">Waiting to Start</h3>
+                            <p class="text-gray-400">Select a game mode when ready</p>
+                        </div>
+
+                        <!-- Chase Game State -->
+                        <div id="chaseState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">The Chase</h3>
+                                <p id="chaseStatus" class="text-gray-400"></p>
+                            </div>
+                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
+                                <!-- Chase board positions will be added here -->
+                            </div>
+                            <div id="chaseQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
+                                <p class="text-lg font-medium"></p>
+                            </div>
+                            <div id="chaseTimer" class="text-xl font-bold text-center"></div>
+                        </div>
+
+                        <!-- Trivia Game State -->
+                        <div id="triviaState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">Trivia Time</h3>
+                                <p id="triviaRound" class="text-gray-400"></p>
+                            </div>
+                            <div id="triviaQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
+                                <p class="text-lg font-medium"></p>
+                            </div>
+                            <div id="triviaAnswers" class="grid grid-cols-2 gap-4">
+                                <!-- Answer stats will be shown here -->
+                            </div>
+                            <div id="triviaTimer" class="text-xl font-bold text-center mt-4"></div>
+                        </div>
+
+                        <!-- Drawing Game State -->
+                        <div id="drawingState" class="hidden">
+                            <div class="text-center mb-6">
+                                <h3 class="text-2xl font-bold">Chinese Whispers</h3>
+                                <p id="drawingTurn" class="text-gray-400"></p>
+                            </div>
+                            <div id="drawingDisplay" class="bg-white rounded-lg aspect-video mb-4">
+                                <!-- Drawing will be shown here -->
+                            </div>
+                            <div id="drawingWord" class="text-center text-xl font-bold"></div>
+                            <div id="drawingTimer" class="text-xl font-bold text-center mt-4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Players -->
+                <div class="lg:col-span-1">
                     <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
-                    <div id="playerList" class="player-list p-4 min-h-[200px]">
-                        <p class="text-gray-500">Waiting for players to join...</p>
+                    <div id="playerList" class="player-list p-4 min-h-[400px] space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
+                            <div class="text-sm text-gray-500" id="minPlayersStatus">
+                                Need 2+ players to start
+                            </div>
+                        </div>
+                        <div id="playerGrid" class="grid grid-cols-1 gap-3">
+                            <!-- Players will be added here dynamically -->
+                        </div>
+                        <div id="emptyState" class="text-center py-8">
+                            <div class="text-gray-400">
+                                <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                <p>Waiting for players to join...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-8 text-center">
-                <button onclick="startGame('chinese_whispers')" 
-                        class="bg-indigo-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-indigo-700 transition">
-                    Start Drawing Game
+            <!-- Casting Controls -->
+            <div class="fixed top-4 right-4 flex items-center space-x-4 z-50">
+                <!-- Cast Button -->
+                <google-cast-launcher id="castButton" class="w-10 h-10"></google-cast-launcher>
+                
+                <!-- Fire TV Button -->
+                <button onclick="showFireTVDialog()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Cast to Fire TV">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1h-7v2h3a1 1 0 110 2H9a1 1 0 110-2h3v-2H4a1 1 0 01-1-1V5z" stroke-width="2"/>
+                    </svg>
                 </button>
-                <button onclick="startGame('trivia')" 
-                        class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition">
-                    Start Trivia Game
+                
+                <!-- AirPlay Button -->
+                <button onclick="startAirPlay()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="AirPlay">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M5 15l7-7 7 7M12 8v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+
+                <!-- Fire TV Connection Dialog -->
+                <div id="fireTVDialog" class="fixed inset-0 bg-black/50 hidden items-center justify-center">
+                    <div class="bg-white p-6 rounded-xl max-w-md w-11/12 space-y-4">
+                        <h3 class="text-xl font-bold">Cast to Fire TV</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 1: Screen Mirroring</h4>
+                                <ol class="text-sm space-y-2 text-gray-600">
+                                    <li>1. On your Fire TV, press and hold the <span class="font-medium">Home</span> button</li>
+                                    <li>2. Select <span class="font-medium">Mirroring</span></li>
+                                    <li>3. On your phone, enable screen mirroring and select your Fire TV</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 2: Fire TV Browser</h4>
+                                <ol class="text-sm space-y-2 text-gray-600">
+                                    <li>1. On your Fire TV, open <span class="font-medium">Firefox</span> or <span class="font-medium">Silk Browser</span></li>
+                                    <li>2. Enter this URL:</li>
+                                    <div class="bg-white p-2 rounded border text-sm font-mono break-all">
+                                        {{ local_url }}
+                                    </div>
+                                    <li>3. Enter room code: <span class="font-mono font-medium">{{ room_id }}</span></li>
+                                </ol>
+                            </div>
+                            
+                            <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <h4 class="font-medium">Method 3: QR Code</h4>
+                                <p class="text-sm text-gray-600">Scan with Fire TV app on your phone:</p>
+                                <img src="{{ qr_code }}" alt="QR Code" class="w-32 h-32 mx-auto">
+                            </div>
+                        </div>
+                        
+                        <button onclick="document.getElementById('fireTVDialog').classList.add('hidden')"
+                                class="w-full bg-gray-100 py-2 rounded-lg hover:bg-gray-200 transition-all">
+                            Close
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Smart TV Button -->
+                <button onclick="showTVQRCode()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Smart TV">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <rect x="2" y="7" width="20" height="15" rx="2" ry="2" stroke-width="2"/>
+                        <line x1="17" y1="2" x2="7" y2="2" stroke-width="2"/>
+                        <line x1="12" y1="2" x2="12" y2="7" stroke-width="2"/>
+                    </svg>
+                </button>
+
+                <!-- Fullscreen Button -->
+                <button onclick="toggleFullscreen()" 
+                        class="bg-black/80 p-2 rounded-lg hover:bg-black/90 transition-all"
+                        title="Fullscreen">
+                    <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" 
+                              stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
                 </button>
             </div>
+
+            <!-- TV Connection Modal -->
+            <div id="tvModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+                <div class="bg-white p-6 rounded-xl max-w-md w-11/12">
+                    <h3 class="text-xl font-bold mb-4">Connect to Smart TV</h3>
+                    <div class="space-y-4">
+                        <div class="text-center">
+                            <img id="tvQRCode" class="mx-auto" alt="TV QR Code">
+                            <p class="text-sm text-gray-600 mt-2">Scan with your TV's mobile app</p>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <p class="text-sm font-medium">Manual Connection:</p>
+                            <code class="text-xs block mt-1 text-gray-600 break-all" id="tvCode"></code>
+                        </div>
+                        <button onclick="document.getElementById('tvModal').classList.add('hidden')"
+                                class="w-full bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition-all">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center space-y-4">
+                <div class="flex justify-center space-x-4">
+                    <button onclick="startGame('chinese_whispers')" 
+                            class="game-btn bg-indigo-600 text-white px-6 py-3 rounded-lg transform hover:scale-105 hover:bg-indigo-700 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                            </svg>
+                            Start Drawing Game
+                        </span>
+                    </button>
+                    <button onclick="startGame('trivia')" 
+                            class="game-btn bg-purple-600 text-white px-6 py-3 rounded-lg transform hover:scale-105 hover:bg-purple-700 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                            Start Trivia Game
+                        </span>
+                    </button>
+                    <button onclick="startGame('chase')" 
+                            class="game-btn bg-red-600 text-white px-6 py-3 rounded-lg transform hover:scale-105 hover:bg-red-700 active:scale-95 transition-all duration-150 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+                        <span class="flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Start Chase Game
+                        </span>
+                    </button>
+                </div>
+                <div class="text-sm space-y-2">
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <p class="font-semibold text-gray-700 mb-1">Local Network (Same WiFi):</p>
+                        <a href="{{ local_url }}" class="text-indigo-600 hover:underline font-mono break-all">{{ local_url }}</a>
+                    </div>
+                    {% if public_url %}
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <p class="font-semibold text-gray-700 mb-1">Public URL (Anyone):</p>
+                        <a href="{{ public_url }}" class="text-indigo-600 hover:underline font-mono break-all">{{ public_url }}</a>
+                        <p class="text-xs text-gray-500 mt-1">This is a secure, shortened URL that masks your IP address</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <script>
+                // Game state management
+                const gameState = {
+                    currentGame: null,
+                    round: 0,
+                    totalRounds: 3,
+                    timeLeft: 0,
+                    timer: null,
+                    scores: {},
+
+                    // Initialize game state
+                    init() {
+                        this.socket = io({
+                            query: { room_id: "{{ room_id }}", is_host: true },
+                            transports: ['websocket'],
+                            upgrade: false
+                        });
+
+                        this.setupSocketEvents();
+                        this.setupGameTimers();
+                    },
+
+                    // Set up socket event handlers
+                    setupSocketEvents() {
+                        this.socket.on('game_started', (data) => {
+                            console.log('Game started:', data);
+                            this.currentGame = data.game_type;
+                            this.round = data.round;
+                            this.totalRounds = data.total_rounds;
+
+                            // Hide all game states
+                            document.getElementById('waitingState').classList.add('hidden');
+                            document.getElementById('chaseState').classList.add('hidden');
+                            document.getElementById('triviaState').classList.add('hidden');
+                            document.getElementById('drawingState').classList.add('hidden');
+
+                            // Show appropriate game state
+                            if (data.game_type === 'chase') {
+                                document.getElementById('chaseState').classList.remove('hidden');
+                                document.getElementById('chaseStatus').textContent = `Category: ${data.chase_category}`;
+                                this.setupChaseBoard(data.board_size);
+                                this.startTimer(data.time_limit);
+                            } else if (data.game_type === 'trivia') {
+                                document.getElementById('triviaState').classList.remove('hidden');
+                                document.getElementById('triviaRound').textContent = `Round ${data.round} of ${data.total_rounds}`;
+                                document.getElementById('triviaQuestion').querySelector('p').textContent = data.question.question;
+                                this.setupTriviaAnswers(data.question.options);
+                                this.startTimer(data.time_limit);
+                            } else if (data.game_type === 'chinese_whispers') {
+                                document.getElementById('drawingState').classList.remove('hidden');
+                                document.getElementById('drawingWord').textContent = `Word: ${data.word}`;
+                                this.startTimer(data.time_limit);
+                            }
+                        });
+
+                        this.socket.on('answer_submitted', (data) => {
+                            if (this.currentGame === 'trivia') {
+                                this.updateTriviaAnswers(data);
+                            } else if (this.currentGame === 'chase') {
+                                this.updateChaseAnswers(data);
+                            }
+                        });
+
+                        this.socket.on('round_complete', (data) => {
+                            this.stopTimer();
+                            this.updateScores(data.scores);
+                            if (data.next_round) {
+                                setTimeout(() => this.startNextRound(data), 3000);
+                            }
+                        });
+
+                        this.socket.on('game_complete', (data) => {
+                            this.stopTimer();
+                            this.showGameResults(data);
+                        });
+                    },
+
+                    // Timer management
+                    startTimer(seconds) {
+                        this.stopTimer();
+                        this.timeLeft = seconds;
+                        this.updateTimerDisplay();
+                        this.timer = setInterval(() => {
+                            this.timeLeft--;
+                            this.updateTimerDisplay();
+                            if (this.timeLeft <= 0) {
+                                this.stopTimer();
+                            }
+                        }, 1000);
+                    },
+
+                    stopTimer() {
+                        if (this.timer) {
+                            clearInterval(this.timer);
+                            this.timer = null;
+                        }
+                    },
+
+                    updateTimerDisplay() {
+                        const timerElement = document.getElementById(`${this.currentGame}Timer`);
+                        if (timerElement) {
+                            timerElement.textContent = this.timeLeft;
+                        }
+                    },
+
+                    // Game-specific setup
+                    setupChaseBoard(size) {
+                        const board = document.getElementById('chaseBoard');
+                        board.innerHTML = '';
+                        for (let i = 0; i < size; i++) {
+                            const position = document.createElement('div');
+                            position.className = 'bg-gray-800 rounded-lg p-4 text-center';
+                            position.textContent = i + 1;
+                            board.appendChild(position);
+                        }
+                    },
+
+                    setupTriviaAnswers(options) {
+                        const answers = document.getElementById('triviaAnswers');
+                        answers.innerHTML = '';
+                        options.forEach((option, index) => {
+                            const answerBox = document.createElement('div');
+                            answerBox.className = 'bg-gray-800 rounded-lg p-4';
+                            answerBox.innerHTML = `
+                                <div class="font-medium">${option}</div>
+                                <div class="text-sm text-gray-400">Answers: <span id="answer${index}Count">0</span></div>
+                            `;
+                            answers.appendChild(answerBox);
+                        });
+                    },
+
+                    updateTriviaAnswers(data) {
+                        const { option, count } = data;
+                        const countElement = document.getElementById(`answer${option}Count`);
+                        if (countElement) {
+                            countElement.textContent = count;
+                        }
+                    },
+
+                    updateChaseAnswers(data) {
+                        const { player, correct } = data;
+                        const answers = document.getElementById('chaseAnswers');
+                        const answerBox = document.createElement('div');
+                        answerBox.className = `rounded-lg p-4 ${correct ? 'bg-green-800' : 'bg-red-800'}`;
+                        answerBox.textContent = `${player}: ${correct ? 'Correct!' : 'Wrong!'}`;
+                        answers.appendChild(answerBox);
+                    },
+
+                    updateScores(scores) {
+                        this.scores = scores;
+                        // Update score display
+                        const scoreElements = document.querySelectorAll('.player-score');
+                        scoreElements.forEach(element => {
+                            const playerId = element.dataset.playerId;
+                            if (playerId in scores) {
+                                element.textContent = scores[playerId];
+                            }
+                        });
+                    },
+
+                    showGameResults(data) {
+                        const winner = data.winner;
+                        const scores = data.final_scores;
+                        // Show game results overlay
+                        // TODO: Implement results display
+                    }
+                };
+
+                // Start game function
+                function startGame(type) {
+                    const buttons = document.querySelectorAll('.game-btn');
+                    buttons.forEach(btn => {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    });
+
+                    // Show loading state
+                    const loadingOverlay = document.createElement('div');
+                    loadingOverlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+                    loadingOverlay.innerHTML = `
+                        <div class="bg-white rounded-xl p-8 text-center">
+                            <div class="animate-spin w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                            <p class="text-gray-600">Starting ${type} game...</p>
+                        </div>
+                    `;
+                    document.body.appendChild(loadingOverlay);
+
+                    // Initialize game state
+                    gameState.currentGame = type;
+                    gameState.round = 1;
+                    
+                    // Emit start game event
+                    gameState.socket.emit('start_game', {
+                        room_id: "{{ room_id }}",
+                        game_type: type
+                    });
+
+                    // Set up timeout to remove loading state if no response
+                    setTimeout(() => {
+                        loadingOverlay.remove();
+                        buttons.forEach(btn => {
+                            btn.disabled = false;
+                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        });
+                    }, 10000); // 10 second timeout
+                }
+
+                // Initialize game state when page loads
+                document.addEventListener('DOMContentLoaded', () => {
+                    gameState.init();
+                });
+            </script>
         </div>
     </div>
 
@@ -108,6 +547,212 @@
         const roomId = "{{ room_id }}";
         let gameAudio = new Audio();
         let currentMusic = null;
+        let castSession = null;
+        let airplaySession = null;
+
+        // Initialize casting
+        window.onload = function() {
+            initializeCasting();
+            checkTVSupport();
+        };
+
+        function initializeCasting() {
+            // Initialize Chromecast
+            window['__onGCastApiAvailable'] = function(isAvailable) {
+                if (isAvailable) {
+                    initializeCastApi();
+                }
+            };
+
+            // Initialize AirPlay if available
+            if (window.WebKitPlaybackTargetAvailabilityEvent) {
+                document.addEventListener('webkitplaybacktargetavailabilitychanged', 
+                    function(event) {
+                        if (event.availability === 'available') {
+                            document.querySelector('[onclick="startAirPlay()"]')
+                                .classList.remove('hidden');
+                        }
+                    }
+                );
+            }
+        }
+
+        function initializeCastApi() {
+            const context = cast.framework.CastContext.getInstance();
+            context.setOptions({
+                receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+                autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+            });
+
+            // Listen for cast state changes
+            context.addEventListener(
+                cast.framework.CastContextEventType.CAST_STATE_CHANGED,
+                function(event) {
+                    if (event.castState === cast.framework.CastState.CONNECTED) {
+                        castSession = context.getCurrentSession();
+                        onCastConnected();
+                    } else if (event.castState === cast.framework.CastState.DISCONNECTED) {
+                        castSession = null;
+                        onCastDisconnected();
+                    }
+                }
+            );
+        }
+
+        function startAirPlay() {
+            if (window.WebKitPlaybackTargetAvailabilityEvent) {
+                gameAudio.webkitShowPlaybackTargetPicker();
+                document.addEventListener(
+                    'webkitcurrentplaybacktargetiswirelesschanged',
+                    function(event) {
+                        airplaySession = event.target;
+                        if (event.target.webkitCurrentPlaybackTargetIsWireless) {
+                            onAirPlayConnected();
+                        } else {
+                            onAirPlayDisconnected();
+                        }
+                    }
+                );
+            }
+        }
+
+        function showFireTVDialog() {
+            const dialog = document.getElementById('fireTVDialog');
+            dialog.classList.remove('hidden');
+            dialog.classList.add('flex');
+            
+            // Initialize Fire TV detection
+            if (window.amazon && window.amazon.WebApp) {
+                window.amazon.WebApp.whenReady(function() {
+                    if (window.amazon.WebApp.isFireTV) {
+                        // We're already on Fire TV
+                        dialog.querySelector('.bg-gray-50').innerHTML = `
+                            <div class="text-center py-4">
+                                <p class="text-green-600 font-medium">You're already on Fire TV!</p>
+                                <p class="text-sm text-gray-600 mt-2">You can close this dialog and start playing.</p>
+                            </div>
+                        `;
+                    }
+                });
+            }
+        }
+
+        function showTVQRCode() {
+            const modal = document.getElementById('tvModal');
+            const qrCode = document.getElementById('tvQRCode');
+            const tvCode = document.getElementById('tvCode');
+            
+            // Generate unique TV code
+            const code = generateTVCode();
+            tvCode.textContent = code;
+            
+            // Generate QR code
+            const qrUrl = `https://party-games.hub/tv/${code}`;
+            qrCode.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // Initialize Fire TV support
+        function initFireTVSupport() {
+            if (window.amazon && window.amazon.WebApp) {
+                window.amazon.WebApp.whenReady(function() {
+                    if (window.amazon.WebApp.isFireTV) {
+                        // We're on Fire TV, optimize the UI
+                        document.body.classList.add('tv-mode');
+                        
+                        // Handle Fire TV remote
+                        window.addEventListener('keydown', function(e) {
+                            switch(e.keyCode) {
+                                case 37: // Left
+                                    navigateButtons('prev');
+                                    break;
+                                case 39: // Right
+                                    navigateButtons('next');
+                                    break;
+                                case 13: // Enter/Select
+                                    document.activeElement.click();
+                                    break;
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            initFireTVSupport();
+        });
+
+        function generateTVCode() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function checkTVSupport() {
+            // Check for various TV platforms
+            const tvPlatforms = {
+                tizen: 'webapis' in window, // Samsung TV
+                webos: 'webOS' in window,   // LG TV
+                roku: 'Roku' in window,     // Roku
+                cast: 'chrome' in window && 'cast' in window.chrome
+            };
+
+            // Show relevant connection options
+            Object.entries(tvPlatforms).forEach(([platform, supported]) => {
+                const button = document.querySelector(`[data-platform="${platform}"]`);
+                if (button) {
+                    button.style.display = supported ? 'block' : 'none';
+                }
+            });
+        }
+
+        // Casting event handlers
+        function onCastConnected() {
+            console.log('Cast device connected');
+            document.body.classList.add('casting');
+            // Send initial game state
+            sendGameStateToCast();
+        }
+
+        function onCastDisconnected() {
+            console.log('Cast device disconnected');
+            document.body.classList.remove('casting');
+        }
+
+        function onAirPlayConnected() {
+            console.log('AirPlay device connected');
+            document.body.classList.add('casting');
+        }
+
+        function onAirPlayDisconnected() {
+            console.log('AirPlay device disconnected');
+            document.body.classList.remove('casting');
+        }
+
+        function sendGameStateToCast() {
+            if (castSession) {
+                const gameState = {
+                    room_id: roomId,
+                    players: getPlayerList(),
+                    current_game: getCurrentGame(),
+                    game_state: getGameState()
+                };
+                
+                const message = new cast.framework.messages.GenericMessage('urn:x-cast:com.partygames.game');
+                message.data = gameState;
+                castSession.sendMessage(message);
+            }
+        }
 
         // Audio management
         function playMusic(type) {
@@ -128,23 +773,175 @@
 
         // Socket event handlers
         socket.on('connect', () => {
-            socket.emit('join_room', { room_id: roomId, player_name: 'Host' });
+            socket.emit('join_room', { room_id: roomId, is_host: true });
             playMusic('lobby');
         });
 
+        function updateTimer(duration, timeLeft) {
+            const timerValue = document.getElementById('timerValue');
+            const timerBar = document.getElementById('timerBar');
+            const timerText = document.getElementById('timerText');
+            
+            if (timerValue && timerBar && timerText) {
+                const percentage = (timeLeft / duration) * 100;
+                timerValue.textContent = `${timeLeft}s`;
+                timerBar.style.width = `${percentage}%`;
+                
+                if (timeLeft <= 5) {
+                    timerBar.classList.add('bg-red-600');
+                    timerText.classList.add('text-red-600');
+                } else {
+                    timerBar.classList.remove('bg-red-600');
+                    timerText.classList.remove('text-red-600');
+                }
+            }
+        }
+
+        socket.on('timer_update', (data) => {
+            updateTimer(data.duration, data.timeLeft);
+        });
+
         socket.on('player_joined', (data) => {
+            console.log('Player joined:', data);
             updatePlayerList(data.players);
             playSound('player_join');
+            showToast(`${data.player_name} joined the game!`, 'success');
+            updateGameControls(data.players.length);
         });
 
         socket.on('player_left', (data) => {
+            console.log('Player left:', data);
             updatePlayerList(data.players);
             playSound('player_leave');
+            showToast(`${data.disconnected_player} left the game`, 'warning');
+            updateGameControls(data.players.length);
         });
 
+        function updatePlayerList(players) {
+            const playerGrid = document.getElementById('playerGrid');
+            const emptyState = document.getElementById('emptyState');
+            const playerCount = document.getElementById('playerCount');
+            const minPlayersStatus = document.getElementById('minPlayersStatus');
+            
+            // Update player count
+            playerCount.textContent = players.length;
+            
+            // Update min players status
+            if (players.length < 2) {
+                minPlayersStatus.textContent = 'Need 2+ players to start';
+                minPlayersStatus.className = 'text-sm text-red-500';
+            } else {
+                minPlayersStatus.textContent = 'Ready to start!';
+                minPlayersStatus.className = 'text-sm text-green-500';
+            }
+            
+            // Show/hide empty state
+            emptyState.style.display = players.length === 0 ? 'block' : 'none';
+            
+            // Clear and rebuild player grid
+            playerGrid.innerHTML = '';
+            players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-3 player-join';
+                
+                // Profile picture
+                const profileContainer = document.createElement('div');
+                profileContainer.className = 'w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0';
+                if (player.profile_picture) {
+                    const img = document.createElement('img');
+                    img.src = player.profile_picture;
+                    img.className = 'w-full h-full object-cover';
+                    profileContainer.appendChild(img);
+                } else {
+                    // Default avatar with first letter
+                    const defaultAvatar = document.createElement('div');
+                    defaultAvatar.className = 'w-full h-full flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold text-lg';
+                    defaultAvatar.textContent = player.name[0].toUpperCase();
+                    profileContainer.appendChild(defaultAvatar);
+                }
+                
+                // Player info
+                const info = document.createElement('div');
+                info.className = 'flex-1 min-w-0';
+                info.innerHTML = `
+                    <p class="text-sm font-medium text-gray-900 truncate">${player.name}</p>
+                    <p class="text-xs text-gray-500">${player.is_host ? 'Host' : 'Player'}</p>
+                `;
+                
+                playerCard.appendChild(profileContainer);
+                playerCard.appendChild(info);
+                playerGrid.appendChild(playerCard);
+            });
+        }
+
+        function updateGameControls(playerCount) {
+            const gameButtons = document.querySelectorAll('.game-btn');
+            const canStart = playerCount >= 2;
+            
+            gameButtons.forEach(btn => {
+                btn.disabled = !canStart;
+                if (!canStart) {
+                    btn.setAttribute('title', 'Need at least 2 players to start');
+                } else {
+                    btn.removeAttribute('title');
+                }
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg text-white text-sm z-50 transition-all duration-300 ${
+                type === 'success' ? 'bg-green-500' :
+                type === 'warning' ? 'bg-yellow-500' :
+                type === 'error' ? 'bg-red-500' :
+                'bg-black/80'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.style.transform = 'translate(-50%, 0)';
+                toast.style.opacity = '1';
+            });
+            
+            // Remove after delay
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         socket.on('game_started', (data) => {
-            playMusic(data.game_type === 'chinese_whispers' ? 'drawing' : 'trivia');
+            if (data.game_type === 'chase') {
+                playMusic('chase');
+            } else {
+                playMusic(data.game_type === 'chinese_whispers' ? 'drawing' : 'trivia');
+            }
             updateGameState(data);
+        });
+
+        socket.on('chase_setup', (data) => {
+            updateGameState({ game_type: 'chase' });
+            const gameContent = document.getElementById('gameContent');
+            if (gameContent) {
+                gameContent.innerHTML = `
+                    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+                        <h3 class="text-2xl font-bold mb-4">The Chase</h3>
+                        <p class="text-lg mb-4">Waiting for players to choose roles...</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 bg-gray-100 rounded-lg">
+                                <h4 class="font-bold mb-2">Chaser</h4>
+                                <p id="chaserName" class="text-gray-600">Waiting...</p>
+                            </div>
+                            <div class="p-4 bg-gray-100 rounded-lg">
+                                <h4 class="font-bold mb-2">Category</h4>
+                                <p id="chaseCategory" class="text-gray-600">Not selected</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
         });
 
         socket.on('round_start', (data) => {
@@ -167,6 +964,98 @@
             showGameResults(data);
         });
 
+        socket.on('chase_started', (data) => {
+            document.getElementById('chaserName').textContent = data.chaser;
+            document.getElementById('chaseCategory').textContent = data.category;
+        });
+
+        socket.on('chase_question', (data) => {
+            const gameContent = document.getElementById('gameContent');
+            gameContent.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="text-lg font-bold">Contestant: ${data.contestant}</div>
+                        <div class="text-lg font-bold">Category: ${data.question.category}</div>
+                    </div>
+                    <div class="chase-board mb-6 relative h-20 bg-gray-200 rounded-lg">
+                        <div class="absolute inset-y-0 left-0 bg-red-500 transition-all duration-500" 
+                             style="width: ${(data.position / data.board_size) * 100}%"></div>
+                        <div class="absolute inset-0 flex items-center justify-between px-4">
+                            <div class="z-10 text-white font-bold">Chaser</div>
+                            <div class="z-10 font-bold">Safety</div>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-100 p-4 rounded-lg mb-4">
+                        <h4 class="text-xl font-bold mb-2">Question:</h4>
+                        <p class="text-lg">${data.question.question}</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        ${data.question.options.map(option => `
+                            <div class="p-3 bg-gray-100 rounded-lg text-center">
+                                ${option}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        socket.on('chase_answer', (data) => {
+            const result = data.result;
+            const gameContent = document.getElementById('gameContent');
+            const answerDiv = document.createElement('div');
+            answerDiv.className = 'mt-4 p-4 rounded-lg ' + 
+                                (result.is_correct ? 'bg-green-100' : 'bg-red-100');
+            answerDiv.innerHTML = `
+                <p class="font-bold">${data.player}'s Answer: ${data.answer}</p>
+                <p class="mt-2">${result.is_correct ? 'Correct!' : 'Incorrect! The correct answer was: ' + result.correct_answer}</p>
+            `;
+            gameContent.appendChild(answerDiv);
+
+            // Update chase board position
+            const chaseBoard = gameContent.querySelector('.chase-board > div:first-child');
+            if (chaseBoard) {
+                const newPosition = (data.position / data.board_size) * 100;
+                chaseBoard.style.width = `${newPosition}%`;
+            }
+
+            // Play sound effect
+            playSound(result.is_correct ? 'correct_answer' : 'wrong_answer');
+        });
+
+        socket.on('chase_complete', (data) => {
+            const gameContent = document.getElementById('gameContent');
+            gameContent.innerHTML = `
+                <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+                    <h3 class="text-2xl font-bold mb-4">Chase Complete!</h3>
+                    <div class="text-xl mb-6 ${data.winner === 'contestant' ? 'text-green-600' : 'text-red-600'}">
+                        ${data.winner === 'contestant' ? 'Contestant Escaped!' : 'Chaser Wins!'}
+                    </div>
+                    <div class="max-w-md mx-auto">
+                        <h4 class="text-xl font-bold mb-2">Leaderboard</h4>
+                        ${data.leaderboard.map((player, i) => `
+                            <div class="flex items-center justify-between p-2 ${i === 0 ? 'bg-yellow-100' : 'bg-gray-50'} rounded mb-2">
+                                <span class="font-bold">${i + 1}. ${player.name}</span>
+                                <span class="text-indigo-600">${player.score} points</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        socket.on('chase_cancelled', (data) => {
+            showError(data.reason);
+            playMusic('lobby');
+            updateGameState({ game_type: 'waiting' });
+        });
+
+        socket.on('game_cancelled', (data) => {
+            showError(data.reason);
+            playMusic('lobby');
+            updateGameState({ game_type: 'waiting' });
+        });
+
         socket.on('error', (data) => {
             showError(data.message);
             playSound('error');
@@ -181,7 +1070,8 @@
                 playerList.innerHTML = players
                     .map(player => `
                         <div class="bg-white p-2 mb-2 rounded shadow flex justify-between items-center">
-                            <span>${player}</span>
+                            <span>${player.name}</span>
+                            <span class="text-indigo-600">${player.score || 0} points</span>
                             <span class="inline-block w-3 h-3 bg-green-500 rounded-full"></span>
                         </div>
                     `).join('');
@@ -190,16 +1080,78 @@
 
         function updateGameState(data) {
             const gameArea = document.querySelector('.game-container');
-            gameArea.innerHTML = `
-                <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-indigo-600">
-                        ${data.game_type === 'chinese_whispers' ? 'Drawing Game' : 'Trivia Game'}
-                    </h2>
-                    <p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>
-                </div>
-                <div id="gameContent" class="mb-8"></div>
-                <div id="leaderboard" class="mt-8"></div>
-            `;
+            
+            if (data.game_type === 'waiting') {
+                gameArea.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h1 class="text-3xl font-bold text-indigo-600 mb-4">Game Room</h1>
+                        <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div class="text-center">
+                            <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
+                            <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4">
+                            <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
+                        </div>
+
+                        <div>
+                            <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
+                            <div id="playerList" class="player-list p-4 min-h-[200px]">
+                                <p class="text-gray-500">Waiting for players to join...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 text-center">
+                        <button onclick="startGame('chinese_whispers')" 
+                                class="bg-indigo-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-indigo-700 transition">
+                            Start Drawing Game
+                        </button>
+                        <button onclick="startGame('trivia')" 
+                                class="bg-purple-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-purple-700 transition">
+                            Start Trivia Game
+                        </button>
+                        <button onclick="startGame('chase')" 
+                                class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition">
+                            Start Chase Game
+                        </button>
+                    </div>
+                `;
+            } else {
+                gameArea.innerHTML = `
+                    <div class="text-center mb-8">
+                        <h2 class="text-2xl font-bold text-indigo-600">
+                            ${data.game_type === 'chinese_whispers' ? 'Drawing Game' : 
+                              data.game_type === 'trivia' ? 'Trivia Game' : 'The Chase'}
+                        </h2>
+                        ${data.game_type !== 'chase' && data.round ? 
+                          `<p class="text-lg text-gray-600">Round ${data.round} of ${data.total_rounds}</p>` : ''}
+                    </div>
+                    <div id="timer" class="mb-4 text-center">
+                        <div class="relative pt-1">
+                            <div class="flex mb-2 items-center justify-between">
+                                <div class="text-xl font-semibold text-indigo-600">
+                                    <span id="timerText">Time Remaining</span>
+                                </div>
+                                <div class="text-right">
+                                    <span id="timerValue" class="text-xl font-semibold text-indigo-800">
+                                        60s
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="overflow-hidden h-4 mb-4 text-xs flex rounded bg-indigo-200">
+                                <div id="timerBar" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="gameContent" class="mb-8 bg-white p-6 rounded-lg shadow-lg"></div>
+                    <div id="leaderboard" class="mt-8">
+                        <h3 class="text-xl font-bold text-indigo-600 mb-4">Leaderboard</h3>
+                        <div id="leaderboardContent" class="space-y-2"></div>
+                    </div>
+                `;
+            }
         }
 
         function updateRoundInfo(data) {
@@ -292,7 +1244,10 @@
         }
 
         function startGame(gameType) {
-            socket.emit('start_game', { room_id: roomId, game_type: gameType });
+            socket.emit('start_game', { 
+                room_id: roomId, 
+                game_type: gameType 
+            });
         }
     </script>
 </body>
