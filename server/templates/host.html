@@ -370,18 +370,38 @@
                     },
 
                     // Set up socket event handlers
+                    initChaseBoard(size) {
+                        const board = document.getElementById('chaseBoard');
+                        board.innerHTML = '';
+                        board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+                        
+                        for (let i = 0; i < size; i++) {
+                            const cell = document.createElement('div');
+                            cell.className = 'bg-gray-800 rounded-lg aspect-square';
+                            cell.id = `chase-cell-${i}`;
+                            board.appendChild(cell);
+                        }
+                    },
+
                     setupSocketEvents() {
                         this.socket.on('game_started', (data) => {
                             console.log('Game started:', data);
                             this.currentGame = data.game_type;
-                            this.round = data.round;
-                            this.totalRounds = data.total_rounds;
+                            this.gameState = data.game_state;
 
                             // Hide all game states
                             document.getElementById('waitingState').classList.add('hidden');
                             document.getElementById('chaseState').classList.add('hidden');
                             document.getElementById('triviaState').classList.add('hidden');
                             document.getElementById('drawingState').classList.add('hidden');
+
+                            // Show appropriate game state
+                            if (this.currentGame === 'chase') {
+                                document.getElementById('chaseState').classList.remove('hidden');
+                                document.getElementById('chaseStatus').textContent = 
+                                    `Category: ${data.chase_category}`;
+                                this.initChaseBoard(data.board_size);
+                            }
 
                             // Show appropriate game state
                             if (data.game_type === 'chase') {

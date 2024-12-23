@@ -572,13 +572,46 @@
                 this.socket.on('game_started', (data) => {
                     console.log('Game started:', data);
                     this.currentGame = data.game_type;
+                    this.gameState = data.game_state;
                     
                     // Hide welcome screen and show game screen
                     document.getElementById('welcomeScreen').classList.add('hidden');
                     document.getElementById('gameArea').classList.remove('hidden');
                     
+                    // Hide all game screens
+                    document.getElementById('triviaScreen').classList.add('hidden');
+                    document.getElementById('chaseScreen').classList.add('hidden');
+                    document.getElementById('drawingScreen').classList.add('hidden');
+                    
                     // Show appropriate game screen
-                    if (data.game_type === 'trivia') {
+                    if (data.game_type === 'chase') {
+                        document.getElementById('chaseScreen').classList.remove('hidden');
+                        
+                        // Update chase info
+                        document.getElementById('chaseInfo').innerHTML = `
+                            <div class="text-xl font-bold mb-2">
+                                ${data.is_chaser ? 'You are the Chaser!' : 'You are a Contestant!'}
+                            </div>
+                            <div class="text-gray-600">
+                                Category: ${data.chase_category}
+                            </div>
+                        `;
+                        
+                        // Initialize chase board
+                        const board = document.getElementById('chaseBoard');
+                        board.innerHTML = '';
+                        board.style.gridTemplateColumns = `repeat(${data.board_size}, 1fr)`;
+                        
+                        for (let i = 0; i < data.board_size; i++) {
+                            const cell = document.createElement('div');
+                            cell.className = 'bg-gray-800 rounded-lg aspect-square';
+                            cell.id = `chase-cell-${i}`;
+                            board.appendChild(cell);
+                        }
+                        
+                        // Play chase music
+                        playMusic('chase');
+                    } else if (data.game_type === 'trivia') {
                         document.getElementById('triviaScreen').classList.remove('hidden');
                         document.getElementById('questionText').textContent = data.question.question;
                         const options = document.getElementById('answerOptions');
