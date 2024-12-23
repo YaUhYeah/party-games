@@ -528,10 +528,61 @@
                     },
 
                     showGameResults(data) {
-                        const winner = data.winner;
-                        const scores = data.final_scores;
-                        // Show game results overlay
-                        // TODO: Implement results display
+                        // Create results overlay
+                        const overlay = document.createElement('div');
+                        overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+                        
+                        const content = document.createElement('div');
+                        content.className = 'bg-white rounded-xl p-8 max-w-2xl w-11/12 transform transition-all';
+                        
+                        // Build results content
+                        let resultsHTML = `
+                            <h2 class="text-3xl font-bold text-center mb-6">${data.title || 'Game Results'}</h2>
+                            <div class="space-y-6">
+                        `;
+                        
+                        // Add game-specific results
+                        if (this.currentGame === 'chase') {
+                            resultsHTML += `
+                                <div class="text-center text-xl mb-4">
+                                    ${data.chaser_won ? 
+                                        'The Chaser has caught all contestants!' :
+                                        'Some contestants have escaped with their prize money!'}
+                                </div>
+                                <div class="grid gap-4">
+                                    ${Object.entries(data.final_scores)
+                                        .sort(([,a], [,b]) => b - a)
+                                        .map(([player, score]) => `
+                                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                                <span class="font-medium">${player}</span>
+                                                <span class="text-lg">${score} points</span>
+                                            </div>
+                                        `).join('')}
+                                </div>
+                            `;
+                        }
+                        
+                        // Add continue button
+                        resultsHTML += `
+                            </div>
+                            <div class="mt-8 flex justify-center">
+                                <button onclick="this.closest('.fixed').remove()" 
+                                        class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                                    Continue
+                                </button>
+                            </div>
+                        `;
+                        
+                        content.innerHTML = resultsHTML;
+                        overlay.appendChild(content);
+                        document.body.appendChild(overlay);
+                        
+                        // Play appropriate sound
+                        if (data.chaser_won) {
+                            playMusic('game_over');
+                        } else {
+                            playMusic('victory');
+                        }
                     }
                 };
 

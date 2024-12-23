@@ -270,6 +270,24 @@
                             </div>
                             <div id="chaseQuestion" class="text-xl font-semibold mb-6"></div>
                             <div id="chaseOptions" class="grid grid-cols-1 gap-4">
+                                <!-- Answer options will be added here -->
+                            </div>
+                            <div id="chaseTimer" class="mt-4 text-center text-2xl font-bold"></div>
+                            <div id="chaseFeedback" class="mt-4 text-center hidden">
+                                <div class="correct-feedback text-green-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Correct!</p>
+                                </div>
+                                <div class="wrong-feedback text-red-500 hidden">
+                                    <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <p class="text-xl font-bold">Wrong!</p>
+                                </div>
+                            </div>
+                            <div id="chaseOptions" class="grid grid-cols-1 gap-4">
                                 <!-- Answer buttons will be added here -->
                             </div>
                             <div id="chaseTimer" class="mt-4 text-center text-2xl font-bold"></div>
@@ -428,7 +446,39 @@
                     this.updatePlayerList(data.players);
                     if (data.new_player) {
                         this.showStatus(`${data.new_player} joined the game`, 'info');
+                        playSound('player_join');
                     }
+                    
+                    // Update scores if available
+                    if (data.scores) {
+                        this.updateScores(data.scores);
+                    }
+                });
+                
+                // Helper function to update player list
+                updatePlayerList(players) {
+                    const playerList = document.getElementById('playerList');
+                    if (!playerList) return;
+                    
+                    playerList.innerHTML = '';
+                    players.forEach(player => {
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center p-2 bg-white rounded-lg shadow-sm';
+                        div.innerHTML = `
+                            <div class="flex items-center space-x-2">
+                                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                    <span class="text-indigo-600 font-medium">${player.name[0].toUpperCase()}</span>
+                                </div>
+                                <span class="font-medium">${player.name}</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-gray-500">${player.score || 0} points</span>
+                                ${player.is_chaser ? '<span class="text-red-500">(Chaser)</span>' : ''}
+                            </div>
+                        `;
+                        playerList.appendChild(div);
+                    });
+                };
                 });
 
                 this.socket.on('player_left', (data) => {
@@ -574,9 +624,10 @@
                     this.currentGame = data.game_type;
                     this.gameState = data.game_state;
                     
-                    // Hide welcome screen and show game screen
-                    document.getElementById('welcomeScreen').classList.add('hidden');
+                    // Show game area and hide name input
+                    document.getElementById('nameInput').classList.add('hidden');
                     document.getElementById('gameArea').classList.remove('hidden');
+                    document.getElementById('welcomeScreen').classList.add('hidden');
                     
                     // Hide all game screens
                     document.getElementById('triviaScreen').classList.add('hidden');
@@ -665,11 +716,75 @@
                 });
 
                 this.socket.on('game_complete', (data) => {
-                    const isWinner = data.winner === this.socket.id;
-                    this.showFeedback({
-                        title: isWinner ? 'You Won!' : 'Game Over',
-                        message: isWinner ? 'Congratulations!' : 'Better luck next time!',
-                        stats: {
+                    console.log('Game complete:', data);
+                    this.showGameResults(data);
+                });
+                
+                showGameResults(data) {
+                    // Create results overlay
+                    const overlay = document.createElement('div');
+                    overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+                    
+                    const content = document.createElement('div');
+                    content.className = 'bg-white rounded-xl p-8 max-w-2xl w-11/12 transform transition-all';
+                    
+                    // Build results content
+                    let resultsHTML = `
+                        <h2 class="text-3xl font-bold text-center mb-6">${data.title || 'Game Results'}</h2>
+                        <div class="space-y-6">
+                    `;
+                    
+                    // Add game-specific results
+                    if (this.currentGame === 'chase') {
+                        const isChaser = data.chaser_id === this.socket.id;
+                        const escaped = data.escaped_players?.includes(this.socket.id);
+                        
+                        resultsHTML += `
+                            <div class="text-center text-xl mb-4">
+                                ${isChaser ? 
+                                    (data.chaser_won ? 'You caught all contestants!' : 'Some contestants escaped!') :
+                                    (escaped ? 'You escaped with your prize money!' : 'The Chaser caught you!')}
+                            </div>
+                            <div class="text-center text-2xl font-bold mb-6">
+                                ${isChaser ? 
+                                    `Caught ${data.caught_count} contestants` :
+                                    (escaped ? `Won ${data.prize_money} points!` : 'Better luck next time!')}
+                            </div>
+                            <div class="grid gap-4">
+                                ${Object.entries(data.final_scores)
+                                    .sort(([,a], [,b]) => b - a)
+                                    .map(([player, score]) => `
+                                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                            <span class="font-medium">${player}</span>
+                                            <span class="text-lg">${score} points</span>
+                                        </div>
+                                    `).join('')}
+                            </div>
+                        `;
+                    }
+                    
+                    // Add continue button
+                    resultsHTML += `
+                        </div>
+                        <div class="mt-8 flex justify-center">
+                            <button onclick="this.closest('.fixed').remove()" 
+                                    class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                                Continue
+                            </button>
+                        </div>
+                    `;
+                    
+                    content.innerHTML = resultsHTML;
+                    overlay.appendChild(content);
+                    document.body.appendChild(overlay);
+                    
+                    // Play appropriate sound
+                    if (data.chaser_won) {
+                        playMusic('game_over');
+                    } else {
+                        playMusic('victory');
+                    }
+                },
                             'Your Score': data.final_scores[this.socket.id] || 0,
                             'Best Score': Math.max(...Object.values(data.final_scores))
                         }
