@@ -1336,16 +1336,15 @@
             },
 
             updateScores(scores) {
-                const scoresList = document.getElementById('scoresList');
+                let scoresList = document.getElementById('scoresList');
                 if (!scoresList) {
                     const gameArea = document.getElementById('gameArea');
-                    const scoresDiv = document.createElement('div');
-                    scoresDiv.id = 'scoresList';
-                    scoresDiv.className = 'fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg';
-                    gameArea.appendChild(scoresDiv);
+                    scoresList = document.createElement('div');
+                    scoresList.id = 'scoresList';
+                    scoresList.className = 'fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg';
+                    gameArea.appendChild(scoresList);
                 }
                 
-                const scoresList = document.getElementById('scoresList');
                 scoresList.innerHTML = '<h3 class="font-bold mb-2">Scores</h3>';
                 Object.entries(scores)
                     .sort(([,a], [,b]) => b - a)
@@ -1359,6 +1358,114 @@
                         `;
                         scoresList.appendChild(div);
                     });
+            },
+
+            initDrawingCanvas() {
+                const canvas = document.getElementById('drawingCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Set canvas size
+                const container = canvas.parentElement;
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientWidth * 0.75; // 4:3 aspect ratio
+                
+                // Set default styles
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // Drawing state
+                let isDrawing = false;
+                let lastX = 0;
+                let lastY = 0;
+                
+                // Touch handling
+                function getTouchPos(e) {
+                    const rect = canvas.getBoundingClientRect();
+                    const touch = e.touches[0];
+                    return {
+                        x: touch.clientX - rect.left,
+                        y: touch.clientY - rect.top
+                    };
+                }
+                
+                // Mouse/Touch events
+                canvas.addEventListener('mousedown', startDrawing);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('mouseout', stopDrawing);
+                
+                canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const pos = getTouchPos(e);
+                    startDrawing({ offsetX: pos.x, offsetY: pos.y });
+                });
+                
+                canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const pos = getTouchPos(e);
+                    draw({ offsetX: pos.x, offsetY: pos.y });
+                });
+                
+                canvas.addEventListener('touchend', stopDrawing);
+                canvas.addEventListener('touchcancel', stopDrawing);
+                
+                // Drawing functions
+                function startDrawing(e) {
+                    isDrawing = true;
+                    [lastX, lastY] = [e.offsetX, e.offsetY];
+                }
+                
+                const draw = (e) => {
+                    if (!isDrawing) return;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(e.offsetX, e.offsetY);
+                    ctx.stroke();
+                    
+                    [lastX, lastY] = [e.offsetX, e.offsetY];
+                    
+                    // Send drawing data to server
+                    this.socket.emit('drawing', {
+                        room_id: this.roomId,
+                        drawing: canvas.toDataURL()
+                    });
+                }
+                
+                function stopDrawing() {
+                    isDrawing = false;
+                }
+                
+                // Tool buttons
+                document.querySelectorAll('.color-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        ctx.strokeStyle = btn.dataset.color;
+                    });
+                });
+                
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        if (btn.dataset.tool === 'brush') {
+                            ctx.strokeStyle = document.querySelector('.color-btn.active')?.dataset.color || '#000000';
+                            ctx.globalCompositeOperation = 'source-over';
+                        } else if (btn.dataset.tool === 'eraser') {
+                            ctx.globalCompositeOperation = 'destination-out';
+                        }
+                    });
+                });
+            },
+
+            displayDrawing(drawingData) {
+                const canvas = document.getElementById('drawingCanvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = drawingData;
             },
 
             startTimer(seconds) {
