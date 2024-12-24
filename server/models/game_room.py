@@ -197,14 +197,30 @@ class GameRoom:
         """Get the next question for trivia game."""
         # Track questions by their text to avoid unhashable dict issue
         used_questions = {q['question'] for q in TRIVIA_QUESTIONS if q['question'] in self.used_questions}
-        available_questions = [q for q in TRIVIA_QUESTIONS if q['question'] not in used_questions]
+        
+        # Filter questions by current difficulty level
+        difficulty_map = {'easy': 1, 'medium': 2, 'hard': 3}
+        current_difficulty = difficulty_map[self.difficulty_level]
+        available_questions = [q for q in TRIVIA_QUESTIONS 
+                             if q['question'] not in used_questions and 
+                             q['difficulty'] == current_difficulty]
         
         if not available_questions:
-            self.used_questions.clear()
-            available_questions = TRIVIA_QUESTIONS
+            # If no questions at current difficulty, try easier ones
+            if current_difficulty > 1:
+                available_questions = [q for q in TRIVIA_QUESTIONS 
+                                    if q['question'] not in used_questions and 
+                                    q['difficulty'] < current_difficulty]
             
+            # If still no questions, reset used questions
+            if not available_questions:
+                self.used_questions.clear()
+                available_questions = [q for q in TRIVIA_QUESTIONS 
+                                    if q['difficulty'] == current_difficulty]
+        
         question = random.choice(available_questions)
-        self.used_questions.add(question['question'])  # Store just the question text
+        self.used_questions.add(question['question'])
+        self.round_start_time = datetime.now()  # Reset timer for new question
         return question
 
     def add_player(self, sid: str, name: str, profile_picture: str = None, is_host: bool = False) -> None:
@@ -599,9 +615,23 @@ class GameRoom:
         self.game_state = 'chase_setup'
         self.chaser = chaser_sid
         self.chase_category = category
-        self.chase_position = 0
+        self.chase_state = {
+            'board_size': GAME_CONFIG['chase_board_size'],
+            'chaser_position': 0,
+            'contestant_position': 0,
+            'current_prize': GAME_CONFIG['chase_win'],
+            'offer_high': int(GAME_CONFIG['chase_win'] * 1.5),
+            'offer_low': int(GAME_CONFIG['chase_win'] * 0.5),
+            'time_pressure': False,
+            'power_ups': {
+                'double_steps': 1,
+                'shield': 1,
+                'time_freeze': 1
+            }
+        }
         self.chase_contestant = None
         self.chase_questions = []
+        self.round_start_time = datetime.now()
 
         # Select questions for this chase game
         available_questions = CHASE_QUESTIONS[category]
@@ -615,35 +645,105 @@ class GameRoom:
         )
         random.shuffle(self.chase_questions)
 
-    def select_chase_contestant(self, contestant_sid: str) -> Dict[str, Any]:
+    def select_chase_contestant(self, contestant_sid: str, offer_type: str = 'normal') -> Dict[str, Any]:
         """Select the next contestant for the chase."""
         if contestant_sid not in self.players or contestant_sid == self.chaser:
             raise ValueError("Invalid contestant")
 
         self.chase_contestant = contestant_sid
-        self.chase_position = 0
         self.game_state = 'chase_question'
-        return self.chase_questions[0]
+        self.round_start_time = datetime.now()
 
-    def process_chase_answer(self, player_sid: str, answer: str) -> Dict[str, Any]:
+        # Set starting positions based on offer type
+        if offer_type == 'high':
+            self.chase_state['contestant_position'] = 1
+            self.chase_state['current_prize'] = self.chase_state['offer_high']
+        elif offer_type == 'low':
+            self.chase_state['contestant_position'] = 3
+            self.chase_state['current_prize'] = self.chase_state['offer_low']
+        else:
+            self.chase_state['contestant_position'] = 2
+            self.chase_state['current_prize'] = GAME_CONFIG['chase_win']
+
+        return {
+            'question': self.chase_questions[0],
+            'positions': {
+                'chaser': self.chase_state['chaser_position'],
+                'contestant': self.chase_state['contestant_position']
+            },
+            'prize': self.chase_state['current_prize'],
+            'power_ups': self.chase_state['power_ups']
+        }
+
+    def process_chase_answer(self, player_sid: str, answer: str, power_up: str = None) -> Dict[str, Any]:
         """Process an answer in the chase game."""
-        current_question = self.chase_questions[0]
-        is_correct = answer == current_question['correct']
-        is_contestant = player_sid == self.chase_contestant
+        if not self.chase_questions:
+            raise ValueError("No questions available")
 
+        current_question = self.chase_questions[0]
+        is_contestant = player_sid == self.chase_contestant
+        if not is_contestant and player_sid != self.chaser:
+            raise ValueError("Not your turn")
+
+        # Handle power-ups
+        move_spaces = 1
+        block_chaser = False
+        if is_contestant and power_up:
+            if power_up == 'double_steps' and self.chase_state['power_ups']['double_steps'] > 0:
+                move_spaces = 2
+                self.chase_state['power_ups']['double_steps'] -= 1
+            elif power_up == 'shield' and self.chase_state['power_ups']['shield'] > 0:
+                block_chaser = True
+                self.chase_state['power_ups']['shield'] -= 1
+
+        is_correct = answer == current_question['correct']
         result = {
             'is_correct': is_correct,
             'correct_answer': current_question['correct'],
             'player_type': 'contestant' if is_contestant else 'chaser',
+            'power_up_used': power_up if power_up else None,
             'position_change': 0
         }
+        # Update positions based on answer
+        if is_correct:
+            if is_contestant:
+                self.chase_state['contestant_position'] += move_spaces
+                result['position_change'] = move_spaces
+            elif not block_chaser:
+                self.chase_state['chaser_position'] += 1
+                result['position_change'] = 1
+        
+        # Update time pressure flag
+        distance = self.chase_state['contestant_position'] - self.chase_state['chaser_position']
+        self.chase_state['time_pressure'] = distance <= 2
 
-        if is_contestant and is_correct:
-            self.chase_position += 1
-            result['position_change'] = 1
-        elif not is_contestant and is_correct:  # Chaser
-            self.chase_position -= 1
-            result['position_change'] = -1
+        # Check if chase is over
+        if self.chase_state['contestant_position'] >= self.chase_state['board_size']:
+            result['game_over'] = True
+            result['winner'] = 'contestant'
+            self.scores[self.chase_contestant] = self.scores.get(self.chase_contestant, 0) + self.chase_state['current_prize']
+        elif self.chase_state['chaser_position'] >= self.chase_state['contestant_position']:
+            result['game_over'] = True
+            result['winner'] = 'chaser'
+            self.scores[self.chaser] = self.scores.get(self.chaser, 0) + GAME_CONFIG['chase_catch']
+        else:
+            # Move to next question
+            self.chase_questions.pop(0)
+            if self.chase_questions:
+                result['next_question'] = self.chase_questions[0]
+                self.round_start_time = datetime.now()  # Reset timer for next question
+            else:
+                result['game_over'] = True
+                result['winner'] = 'contestant'
+                self.scores[self.chase_contestant] = self.scores.get(self.chase_contestant, 0) + self.chase_state['current_prize']
+
+        result['positions'] = {
+            'chaser': self.chase_state['chaser_position'],
+            'contestant': self.chase_state['contestant_position']
+        }
+        result['time_pressure'] = self.chase_state['time_pressure']
+        result['power_ups'] = self.chase_state['power_ups']
+        return result
 
         # Check if chase is over
         if self.chase_position >= GAME_CONFIG['chase_board_size']:
