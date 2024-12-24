@@ -678,11 +678,17 @@
 
   <!-- Main Script -->
   <script>
-    // Main game state object
-    const gameState = {
+    // Initialize game state globally
+    window.gameState = {
       socket: null,
       roomId: "{{ room_id }}",
       hasJoined: false,
+      profileCanvas: null,
+      profileCtx: null,
+      profileIsDrawing: false,
+      profileLastX: 0,
+      profileLastY: 0,
+      profileTool: 'brush',
       debugVisible: false,
       currentGame: null,
       isDrawer: false,
@@ -698,11 +704,11 @@
       init() {
         console.log("Initializing game with room ID:", this.roomId);
 
-        // 1) Initialize Socket
-        this.initSocket();
+        // 1) Initialize Profile Canvas
+        this.initProfileCanvas();
 
-        // 2) Profile Drawing
-        this.initProfileDrawing();
+        // 2) Initialize Socket
+        this.initSocket();
 
         // 3) Keyboard Listeners
         this.addKeyboardListeners();
@@ -722,6 +728,114 @@
       /****************************************
        *             SOCKET SETUP
        ****************************************/
+      // Initialize profile canvas
+      initProfileCanvas() {
+        this.profileCanvas = document.getElementById("profileCanvas");
+        this.profileCtx = this.profileCanvas.getContext("2d");
+        
+        // Set initial drawing style
+        this.profileCtx.strokeStyle = "#000000";
+        this.profileCtx.lineWidth = 4;
+        this.profileCtx.lineCap = "round";
+        this.profileCtx.lineJoin = "round";
+
+        // Drawing function
+        const draw = (e) => {
+          if (!this.profileIsDrawing) return;
+          e.preventDefault();
+
+          const rect = this.profileCanvas.getBoundingClientRect();
+          const x = ((e.clientX || e.touches[0].clientX) - rect.left) * (this.profileCanvas.width / rect.width);
+          const y = ((e.clientY || e.touches[0].clientY) - rect.top) * (this.profileCanvas.height / rect.height);
+
+          this.profileCtx.beginPath();
+          this.profileCtx.moveTo(this.profileLastX, this.profileLastY);
+          this.profileCtx.lineTo(x, y);
+
+          if (this.profileTool === 'eraser') {
+            this.profileCtx.save();
+            this.profileCtx.strokeStyle = '#FFFFFF';
+            this.profileCtx.lineWidth = this.profileCtx.lineWidth * 2;
+            this.profileCtx.stroke();
+            this.profileCtx.restore();
+          } else {
+            this.profileCtx.stroke();
+          }
+
+          [this.profileLastX, this.profileLastY] = [x, y];
+        };
+
+        // Mouse events
+        this.profileCanvas.addEventListener("mousedown", (e) => {
+          this.profileIsDrawing = true;
+          const rect = this.profileCanvas.getBoundingClientRect();
+          [this.profileLastX, this.profileLastY] = [
+            (e.clientX - rect.left) * (this.profileCanvas.width / rect.width),
+            (e.clientY - rect.top) * (this.profileCanvas.height / rect.height)
+          ];
+        });
+        this.profileCanvas.addEventListener("mousemove", draw);
+        this.profileCanvas.addEventListener("mouseup", () => this.profileIsDrawing = false);
+        this.profileCanvas.addEventListener("mouseout", () => this.profileIsDrawing = false);
+
+        // Touch events
+        this.profileCanvas.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          this.profileIsDrawing = true;
+          const rect = this.profileCanvas.getBoundingClientRect();
+          [this.profileLastX, this.profileLastY] = [
+            (e.touches[0].clientX - rect.left) * (this.profileCanvas.width / rect.width),
+            (e.touches[0].clientY - rect.top) * (this.profileCanvas.height / rect.height)
+          ];
+        });
+        this.profileCanvas.addEventListener("touchmove", draw);
+        this.profileCanvas.addEventListener("touchend", () => this.profileIsDrawing = false);
+
+        // Color picker
+        const colorButtons = document.querySelectorAll("[data-color]");
+        colorButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            this.profileCtx.strokeStyle = button.dataset.color;
+            this.profileTool = 'brush';
+            colorButtons.forEach((btn) =>
+              btn.classList.remove("ring-2", "ring-offset-2")
+            );
+            button.classList.add("ring-2", "ring-offset-2");
+            
+            // Update tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => 
+              btn.classList.remove('bg-gray-100'));
+            document.querySelector('[data-tool="brush"]').classList.add('bg-gray-100');
+          });
+        });
+
+        // Tool buttons
+        const toolButtons = document.querySelectorAll(".tool-btn");
+        toolButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            this.profileTool = button.dataset.tool;
+            toolButtons.forEach((btn) =>
+              btn.classList.remove("bg-gray-100")
+            );
+            button.classList.add("bg-gray-100");
+          });
+        });
+
+        // Brush size slider
+        const sizeSlider = document.getElementById("profileBrushSize");
+        sizeSlider.addEventListener("input", () => {
+          this.profileCtx.lineWidth = sizeSlider.value;
+        });
+      },
+
+      // Clear profile canvas
+      clearProfileCanvas() {
+        if (this.profileCtx) {
+          this.profileCtx.clearRect(0, 0, this.profileCanvas.width, this.profileCanvas.height);
+        }
+      },
+
+      // Initialize socket connection
       initSocket() {
         console.log("Initializing socket connection...");
 
@@ -1160,10 +1274,10 @@
       initDrawingCanvas() {
         const canvas = document.getElementById("drawingCanvas");
         const ctx = canvas.getContext("2d");
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-        let currentTool = 'brush';
+        this.isDrawing = false;
+        this.lastX = 0;
+        this.lastY = 0;
+        this.currentTool = 'brush';
 
         // Adjust canvas size to parent (with ratio)
         const container = canvas.parentElement;
@@ -1317,9 +1431,8 @@
           }
         });
 
-        // Internal drawing state
-        let isDrawing = false;
-        let lastX = 0;
+        // Update internal state
+        [lastX, lastY] = [0, 0];
         let lastY = 0;
 
         // Mouse events

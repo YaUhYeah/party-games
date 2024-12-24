@@ -774,10 +774,20 @@
     </div>
 
     <script>
+        // Audio setup
+        const gameAudio = document.createElement('audio');
+        gameAudio.preload = 'auto';
+        document.body.appendChild(gameAudio);
+
+        const soundEffects = document.createElement('audio');
+        soundEffects.preload = 'auto';
+        document.body.appendChild(soundEffects);
+
+        let currentMusic = null;
+
+        // Socket setup
         const socket = io();
         const roomId = "{{ room_id }}";
-        let gameAudio = new Audio();
-        let currentMusic = null;
         let castSession = null;
         let airplaySession = null;
 
