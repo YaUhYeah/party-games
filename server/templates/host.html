@@ -14,11 +14,13 @@
     <!-- DIAL Protocol Support for Fire TV -->
     <script src="https://www.amazonwebapps.com/scripts/dial.js"></script>
     <!-- AirPlay support -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-tv-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <!-- Smart TV support -->
     <link rel="manifest" href="/static/manifest.json">
     <meta name="samsung-tv-app" content="true">
+    <meta name="theme-color" content="#667eea">
     <style>
         /* TV Mode Styles */
         .tv-mode {
@@ -111,28 +113,86 @@
                                 <h3 class="text-2xl font-bold">The Chase</h3>
                                 <p id="chaseStatus" class="text-gray-400"></p>
                             </div>
-                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
-                                <!-- Chase board positions will be added here -->
+                            
+                            <!-- Game Board -->
+                            <div class="relative mb-6">
+                                <div id="chaseBoard" class="grid grid-cols-7 gap-2 bg-gray-800 p-4 rounded-xl">
+                                    <!-- Board positions will be dynamically added -->
+                                </div>
+                                
+                                <!-- Player Markers -->
+                                <div id="chaseMarkers" class="absolute inset-0 pointer-events-none">
+                                    <div id="chaserMarker" class="absolute transition-all duration-500 ease-in-out">
+                                        <div class="w-10 h-10 bg-red-500 rounded-full shadow-lg flex items-center justify-center text-white font-bold">C</div>
+                                    </div>
+                                    <div id="contestantMarker" class="absolute transition-all duration-500 ease-in-out">
+                                        <div class="w-10 h-10 bg-blue-500 rounded-full shadow-lg flex items-center justify-center text-white font-bold"></div>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="chaseQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
-                                <p class="text-lg font-medium"></p>
+                            
+                            <!-- Question Section -->
+                            <div id="chaseQuestion" class="bg-gray-800 rounded-xl p-6 mb-6">
+                                <p class="text-lg font-medium text-white mb-4"></p>
+                                <div id="chaseAnswers" class="grid grid-cols-1 gap-3">
+                                    <!-- Answer stats will be shown here -->
+                                </div>
                             </div>
-                            <div id="chaseTimer" class="text-xl font-bold text-center"></div>
+                            
+                            <!-- Timer -->
+                            <div id="chaseTimer" class="text-xl font-bold text-center text-white"></div>
+                            
+                            <!-- Player Info -->
+                            <div class="mt-6 grid grid-cols-2 gap-4">
+                                <div class="bg-gray-700 rounded-lg p-4">
+                                    <h4 class="text-sm font-medium text-gray-300 mb-2">Chaser</h4>
+                                    <p id="chaserName" class="text-lg font-bold text-white"></p>
+                                </div>
+                                <div class="bg-gray-700 rounded-lg p-4">
+                                    <h4 class="text-sm font-medium text-gray-300 mb-2">Contestant</h4>
+                                    <p id="contestantName" class="text-lg font-bold text-white"></p>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Trivia Game State -->
                         <div id="triviaState" class="hidden">
                             <div class="text-center mb-6">
-                                <h3 class="text-2xl font-bold">Trivia Time</h3>
+                                <h3 class="text-2xl font-bold text-white">Trivia Time</h3>
                                 <p id="triviaRound" class="text-gray-400"></p>
                             </div>
-                            <div id="triviaQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
-                                <p class="text-lg font-medium"></p>
+                            
+                            <!-- Timer -->
+                            <div class="mb-6">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-400">Time Remaining</span>
+                                    <span id="triviaTimer" class="text-xl font-bold text-white"></span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="triviaTimerBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+                                </div>
                             </div>
+                            
+                            <!-- Question -->
+                            <div id="triviaQuestion" class="bg-gray-700 rounded-xl p-6 mb-6">
+                                <p class="text-lg font-medium text-white"></p>
+                            </div>
+                            
+                            <!-- Answer Options -->
                             <div id="triviaAnswers" class="grid grid-cols-2 gap-4">
                                 <!-- Answer stats will be shown here -->
                             </div>
-                            <div id="triviaTimer" class="text-xl font-bold text-center mt-4"></div>
+                            
+                            <!-- Progress -->
+                            <div class="mt-6">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-400">Players Answered</span>
+                                    <span id="triviaProgress" class="text-white font-medium">0/0</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="triviaProgressBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Drawing Game State -->
@@ -141,11 +201,25 @@
                                 <h3 class="text-2xl font-bold">Chinese Whispers</h3>
                                 <p id="drawingTurn" class="text-gray-400"></p>
                             </div>
-                            <div id="drawingDisplay" class="bg-white rounded-lg aspect-video mb-4">
-                                <!-- Drawing will be shown here -->
+                            <div class="drawing-area relative bg-white rounded-lg overflow-hidden mb-6">
+                                <canvas
+                                    id="drawingDisplay"
+                                    class="drawing-canvas mx-auto border-2 border-gray-200 rounded-lg shadow-inner"
+                                    width="800"
+                                    height="600"
+                                ></canvas>
                             </div>
                             <div id="drawingWord" class="text-center text-xl font-bold"></div>
                             <div id="drawingTimer" class="text-xl font-bold text-center mt-4"></div>
+                            <div id="drawingProgress" class="mt-4">
+                                <div class="flex justify-between text-sm text-gray-500 mb-2">
+                                    <span>Progress</span>
+                                    <span id="drawingProgressText">0/0 Players</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div id="drawingProgressBar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -413,7 +487,23 @@
                                 document.getElementById('triviaState').classList.remove('hidden');
                                 document.getElementById('triviaRound').textContent = `Round ${data.round} of ${data.total_rounds}`;
                                 document.getElementById('triviaQuestion').querySelector('p').textContent = data.question.question;
-                                this.setupTriviaAnswers(data.question.options);
+                                // Setup trivia answers with progress bars
+                                const answersEl = document.getElementById('triviaAnswers');
+                                answersEl.innerHTML = '';
+                                data.question.options.forEach((option, index) => {
+                                    const answerDiv = document.createElement('div');
+                                    answerDiv.className = 'bg-gray-700 p-4 rounded-lg';
+                                    answerDiv.innerHTML = `
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-white">${option}</span>
+                                            <span class="answer-count bg-gray-600 px-3 py-1 rounded-full text-sm text-white">0</span>
+                                        </div>
+                                        <div class="w-full bg-gray-600 rounded-full h-1.5">
+                                            <div class="progress-bar bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                        </div>
+                                    `;
+                                    answersEl.appendChild(answerDiv);
+                                });
                                 this.startTimer(data.time_limit);
                             } else if (data.game_type === 'chinese_whispers') {
                                 document.getElementById('drawingState').classList.remove('hidden');
@@ -423,9 +513,34 @@
                         });
 
                         this.socket.on('answer_submitted', (data) => {
-                            if (this.currentGame === 'trivia') {
-                                this.updateTriviaAnswers(data);
-                            } else if (this.currentGame === 'chase') {
+                            if (data.game_type === 'trivia') {
+                                // Update answer counts
+                                const answerButtons = document.querySelectorAll('#triviaAnswers > div');
+                                data.answer_counts.forEach((count, index) => {
+                                    const countEl = answerButtons[index].querySelector('.answer-count');
+                                    countEl.textContent = count;
+                                    
+                                    // Update progress bar
+                                    const percentage = (count / data.total_players) * 100;
+                                    const progressBar = answerButtons[index].querySelector('.progress-bar');
+                                    progressBar.style.width = `${percentage}%`;
+                                });
+                                
+                                // Update overall progress
+                                const progressEl = document.getElementById('triviaProgress');
+                                const progressBar = document.getElementById('triviaProgressBar');
+                                const totalAnswered = data.answer_counts.reduce((a, b) => a + b, 0);
+                                progressEl.textContent = `${totalAnswered}/${data.total_players}`;
+                                const totalProgress = (totalAnswered / data.total_players) * 100;
+                                progressBar.style.width = `${totalProgress}%`;
+                                
+                                // If everyone has answered, move to next question after a delay
+                                if (totalAnswered === data.total_players) {
+                                    setTimeout(() => {
+                                        socket.emit('all_answered');
+                                    }, 2000);
+                                }
+                            } else if (data.game_type === 'chase') {
                                 this.updateChaseAnswers(data);
                             }
                         });
@@ -446,14 +561,41 @@
 
                     // Timer management
                     startTimer(seconds) {
-                        this.stopTimer();
-                        this.timeLeft = seconds;
-                        this.updateTimerDisplay();
-                        this.timer = setInterval(() => {
-                            this.timeLeft--;
-                            this.updateTimerDisplay();
-                            if (this.timeLeft <= 0) {
-                                this.stopTimer();
+                        if (this.timerInterval) {
+                            clearInterval(this.timerInterval);
+                        }
+
+                        let timeLeft = seconds;
+                        const totalTime = seconds;
+                        const timerEl = document.getElementById('triviaTimer');
+                        const timerBar = document.getElementById('triviaTimerBar');
+                        
+                        this.timerInterval = setInterval(() => {
+                            timerEl.textContent = timeLeft + "s";
+                            const percentage = (timeLeft / totalTime) * 100;
+                            timerBar.style.width = percentage + "%";
+                            
+                            // Change color based on time remaining
+                            if (percentage > 66) {
+                                timerBar.classList.remove("bg-yellow-500", "bg-red-500");
+                                timerBar.classList.add("bg-indigo-500");
+                            } else if (percentage > 33) {
+                                timerBar.classList.remove("bg-indigo-500", "bg-red-500");
+                                timerBar.classList.add("bg-yellow-500");
+                            } else {
+                                timerBar.classList.remove("bg-indigo-500", "bg-yellow-500");
+                                timerBar.classList.add("bg-red-500");
+                            }
+                            
+                            timeLeft--;
+
+                            if (timeLeft < 0) {
+                                clearInterval(this.timerInterval);
+                                timerEl.textContent = "Time's up!";
+                                timerBar.style.width = "0%";
+                                
+                                // Emit event to server
+                                socket.emit('timer_complete');
                             }
                         }, 1000);
                     },
@@ -633,11 +775,39 @@
         </div>
     </div>
 
+    <!-- Audio Elements -->
+    <audio id="gameMusic" preload="auto" loop></audio>
+    <audio id="soundEffects" preload="auto"></audio>
+
     <script>
+        // Audio setup
+        let gameMusic = null;
+        let soundEffects = null;
+        let currentMusic = null;
+
+        // Initialize audio on user interaction
+        function initAudio() {
+            if (!gameMusic) {
+                gameMusic = document.getElementById('gameMusic');
+                soundEffects = document.getElementById('soundEffects');
+                
+                gameMusic.volume = 0.3;
+                soundEffects.volume = 0.5;
+
+                // Start lobby music
+                playMusic('lobby');
+                
+                // Remove initialization listener
+                document.removeEventListener('click', initAudio);
+            }
+        }
+
+        // Add initialization listener
+        document.addEventListener('click', initAudio);
+
+        // Socket setup
         const socket = io();
         const roomId = "{{ room_id }}";
-        let gameAudio = new Audio();
-        let currentMusic = null;
         let castSession = null;
         let airplaySession = null;
 
@@ -847,19 +1017,54 @@
 
         // Audio management
         function playMusic(type) {
-            if (currentMusic !== type) {
-                gameAudio.src = `/static/music/${type}.mp3`;
-                gameAudio.loop = true;
-                gameAudio.volume = 0.5;
-                gameAudio.play();
+            if (!gameMusic || currentMusic === type) return;
+
+            try {
+                const musicPath = `/static/music/${type}.mp3`;
+                
+                // Stop current music if playing
+                if (gameMusic.src && !gameMusic.paused) {
+                    gameMusic.pause();
+                }
+                
+                // Load and play new music
+                gameMusic.src = musicPath;
+                gameMusic.load();
+                
+                const playPromise = gameMusic.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn('Music autoplay prevented:', error);
+                        // Re-add click listener to initialize audio
+                        document.addEventListener('click', initAudio);
+                    });
+                }
+                
                 currentMusic = type;
+            } catch (error) {
+                console.warn('Error playing music:', error);
             }
         }
 
         function playSound(type) {
-            const sound = new Audio(`/static/music/${type}.mp3`);
-            sound.volume = 0.6;
-            sound.play();
+            if (!soundEffects) return;
+
+            try {
+                const soundPath = `/static/sounds/${type}.mp3`;
+                
+                // Create a new audio element for each sound effect
+                const sound = new Audio(soundPath);
+                sound.volume = soundEffects.volume;
+                
+                const playPromise = sound.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn('Sound effect playback failed:', error);
+                    });
+                }
+            } catch (error) {
+                console.warn('Error playing sound:', error);
+            }
         }
 
         // Socket event handlers
@@ -894,7 +1099,53 @@
 
         socket.on('player_joined', (data) => {
             console.log('Player joined:', data);
-            updatePlayerList(data.players);
+            
+            // Update player grid
+            const playerGrid = document.getElementById('playerGrid');
+            const emptyState = document.getElementById('emptyState');
+            const playerCount = document.getElementById('playerCount');
+            const minPlayersStatus = document.getElementById('minPlayersStatus');
+            
+            // Update player count
+            playerCount.textContent = data.players.length;
+            
+            // Show/hide empty state
+            if (data.players.length > 0) {
+                emptyState.classList.add('hidden');
+            } else {
+                emptyState.classList.remove('hidden');
+            }
+            
+            // Update min players status
+            if (data.players.length >= 2) {
+                minPlayersStatus.classList.add('text-green-500');
+                minPlayersStatus.classList.remove('text-gray-500');
+                minPlayersStatus.textContent = 'Ready to start!';
+            } else {
+                minPlayersStatus.classList.remove('text-green-500');
+                minPlayersStatus.classList.add('text-gray-500');
+                minPlayersStatus.textContent = 'Need 2+ players to start';
+            }
+            
+            // Update player grid
+            playerGrid.innerHTML = '';
+            data.players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center space-x-3 player-join';
+                playerCard.innerHTML = `
+                    <div class="flex-shrink-0">
+                        <img src="${player.avatar || '/static/images/default-avatar.png'}" 
+                             alt="${player.name}'s avatar"
+                             class="w-10 h-10 rounded-full bg-gray-200">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 truncate">${player.name}</p>
+                        <p class="text-xs text-gray-500">Joined ${new Date(player.joinTime).toLocaleTimeString()}</p>
+                    </div>
+                `;
+                playerGrid.appendChild(playerCard);
+            });
+            
             playSound('player_join');
             showToast(`${data.player_name} joined the game!`, 'success');
             updateGameControls(data.players.length);
@@ -1043,6 +1294,46 @@
         socket.on('next_player', (data) => {
             playSound('next_player');
             updateCurrentPlayer(data);
+            
+            // Clear the canvas for the new player
+            const canvas = document.getElementById('drawingDisplay');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update progress
+            const progressBar = document.getElementById('drawingProgressBar');
+            const progressText = document.getElementById('drawingProgressText');
+            progressBar.style.width = `${(data.current_player / data.total_players) * 100}%`;
+            progressText.textContent = `${data.current_player}/${data.total_players} Players`;
+        });
+
+        // Handle drawing updates
+        socket.on('drawing_update', (data) => {
+            const canvas = document.getElementById('drawingDisplay');
+            const ctx = canvas.getContext('2d');
+
+            if (data.type === 'clear') {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(data.x1 * canvas.width, data.y1 * canvas.height);
+            ctx.lineTo(data.x2 * canvas.width, data.y2 * canvas.height);
+            
+            if (data.tool === 'eraser') {
+                ctx.save();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = data.width * 2;
+                ctx.stroke();
+                ctx.restore();
+            } else {
+                ctx.strokeStyle = data.color;
+                ctx.lineWidth = data.width;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+            }
         });
 
         socket.on('all_drawings_complete', (data) => {
@@ -1056,13 +1347,73 @@
         });
 
         socket.on('chase_started', (data) => {
-            document.getElementById('chaserName').textContent = data.chaser;
-            document.getElementById('chaseCategory').textContent = data.category;
+            playSound('game_start');
+            
+            // Show chase state
+            document.getElementById('waitingState').classList.add('hidden');
+            document.getElementById('triviaState').classList.add('hidden');
+            document.getElementById('drawingState').classList.add('hidden');
+            document.getElementById('chaseState').classList.remove('hidden');
+            
+            // Update player info
+            document.getElementById('chaserName').textContent = data.chaser_name;
+            document.getElementById('contestantName').textContent = data.contestant_name;
+            document.getElementById('chaseStatus').textContent = `Round ${data.round} - ${data.category}`;
+            
+            // Create board
+            const board = document.getElementById('chaseBoard');
+            board.innerHTML = '';
+            for (let i = 0; i < 7; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'aspect-square bg-gray-700 rounded-lg';
+                board.appendChild(cell);
+            }
+            
+            // Position markers
+            updateMarkerPositions(data.chaser_position, data.contestant_position);
         });
+        
+        function updateMarkerPositions(chaserPos, contestantPos) {
+            const board = document.getElementById('chaseBoard');
+            const cellWidth = board.children[0].offsetWidth;
+            const cellHeight = board.children[0].offsetHeight;
+            const gap = parseInt(getComputedStyle(board).gap);
+            
+            const chaserMarker = document.getElementById('chaserMarker');
+            const contestantMarker = document.getElementById('contestantMarker');
+            
+            // Calculate positions (0 is rightmost, 6 is leftmost)
+            const chaserX = board.offsetWidth - (cellWidth + gap) * chaserPos - cellWidth/2 - 20;
+            const contestantX = board.offsetWidth - (cellWidth + gap) * contestantPos - cellWidth/2 - 20;
+            const y = cellHeight/2 - 20;
+            
+            chaserMarker.style.transform = `translate(${chaserX}px, ${y}px)`;
+            contestantMarker.style.transform = `translate(${contestantX}px, ${y}px)`;
+        }
 
         socket.on('chase_question', (data) => {
-            const gameContent = document.getElementById('gameContent');
-            gameContent.innerHTML = `
+            // Update question text
+            const questionEl = document.querySelector('#chaseQuestion p');
+            questionEl.textContent = data.question;
+            
+            // Update answer options
+            const answersEl = document.getElementById('chaseAnswers');
+            answersEl.innerHTML = '';
+            
+            data.options.forEach((option, index) => {
+                const button = document.createElement('div');
+                button.className = 'bg-gray-700 p-4 rounded-lg text-white flex justify-between items-center';
+                button.innerHTML = `
+                    <span class="text-lg">${option}</span>
+                    <span id="answer-${index}-count" class="bg-gray-600 px-3 py-1 rounded-full text-sm">0</span>
+                `;
+                answersEl.appendChild(button);
+            });
+            
+            // Start timer if provided
+            if (data.time_limit) {
+                startTimer(data.time_limit);
+            }
                 <div class="bg-white p-6 rounded-lg shadow-lg">
                     <div class="flex justify-between items-center mb-4">
                         <div class="text-lg font-bold">Contestant: ${data.contestant}</div>
@@ -1092,11 +1443,41 @@
         });
 
         socket.on('chase_answer', (data) => {
-            const result = data.result;
-            const gameContent = document.getElementById('gameContent');
-            const answerDiv = document.createElement('div');
-            answerDiv.className = 'mt-4 p-4 rounded-lg ' + 
-                                (result.is_correct ? 'bg-green-100' : 'bg-red-100');
+            // Update answer counts
+            data.answers.forEach((count, index) => {
+                const countEl = document.getElementById(`answer-${index}-count`);
+                countEl.textContent = count;
+            });
+            
+            // Highlight correct answer
+            const answersEl = document.getElementById('chaseAnswers');
+            const answerButtons = answersEl.children;
+            
+            for (let i = 0; i < answerButtons.length; i++) {
+                const button = answerButtons[i];
+                if (i === data.correct_answer) {
+                    button.classList.add('bg-green-700');
+                } else {
+                    button.classList.add('bg-red-700');
+                }
+            }
+            
+            // Update positions
+            updateMarkerPositions(data.chaser_position, data.contestant_position);
+            
+            // Show feedback
+            const status = document.getElementById('chaseStatus');
+            if (data.game_over) {
+                if (data.contestant_caught) {
+                    status.textContent = 'Game Over - Contestant Caught!';
+                    playSound('game_over');
+                } else {
+                    status.textContent = 'Game Over - Contestant Escaped!';
+                    playSound('victory');
+                }
+            } else {
+                status.textContent = `Round ${data.round} - Next question in ${data.next_question_delay}s...`;
+            }
             answerDiv.innerHTML = `
                 <p class="font-bold">${data.player}'s Answer: ${data.answer}</p>
                 <p class="mt-2">${result.is_correct ? 'Correct!' : 'Incorrect! The correct answer was: ' + result.correct_answer}</p>
@@ -1115,8 +1496,42 @@
         });
 
         socket.on('chase_complete', (data) => {
-            const gameContent = document.getElementById('gameContent');
-            gameContent.innerHTML = `
+            // Clear question and answers
+            document.querySelector('#chaseQuestion p').textContent = '';
+            document.getElementById('chaseAnswers').innerHTML = '';
+            
+            // Update status
+            const status = document.getElementById('chaseStatus');
+            if (data.contestant_caught) {
+                status.textContent = 'Game Over - Contestant Caught!';
+                playSound('game_over');
+            } else {
+                status.textContent = 'Game Over - Contestant Escaped!';
+                playSound('victory');
+            }
+            
+            // Show final positions
+            updateMarkerPositions(data.chaser_position, data.contestant_position);
+            
+            // Show game stats
+            const questionEl = document.querySelector('#chaseQuestion p');
+            questionEl.innerHTML = `
+                <div class="text-center">
+                    <h3 class="text-xl font-bold mb-4">Game Results</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="font-medium">Contestant</p>
+                            <p class="text-2xl">${data.contestant_score}</p>
+                            <p class="text-sm text-gray-400">correct answers</p>
+                        </div>
+                        <div>
+                            <p class="font-medium">Chaser</p>
+                            <p class="text-2xl">${data.chaser_score}</p>
+                            <p class="text-sm text-gray-400">correct answers</p>
+                        </div>
+                    </div>
+                </div>
+            `;
                 <div class="bg-white p-6 rounded-lg shadow-lg text-center">
                     <h3 class="text-2xl font-bold mb-4">Chase Complete!</h3>
                     <div class="text-xl mb-6 ${data.winner === 'contestant' ? 'text-green-600' : 'text-red-600'}">
@@ -1136,7 +1551,21 @@
         });
 
         socket.on('chase_cancelled', (data) => {
-            showError(data.reason);
+            // Clear game state
+            document.querySelector('#chaseQuestion p').textContent = '';
+            document.getElementById('chaseAnswers').innerHTML = '';
+            document.getElementById('chaseStatus').textContent = 'Game Cancelled';
+            
+            // Show message
+            const questionEl = document.querySelector('#chaseQuestion p');
+            questionEl.innerHTML = `
+                <div class="text-center">
+                    <h3 class="text-xl font-bold text-red-500 mb-4">Game Cancelled</h3>
+                    <p class="text-gray-300">${data.reason || 'A player has disconnected'}</p>
+                </div>
+            `;
+            
+            playSound('game_over');
             playMusic('lobby');
             updateGameState({ game_type: 'waiting' });
         });

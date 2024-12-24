@@ -373,67 +373,92 @@
         <div id="triviaScreen" class="hidden">
           <div class="max-w-2xl mx-auto">
             <div class="bg-white rounded-xl shadow-lg p-6">
-              <div
-                id="questionText"
-                class="text-xl font-semibold mb-6"
-              ></div>
-              <div
-                id="answerOptions"
-                class="grid grid-cols-1 gap-4"
-              >
+              <!-- Timer -->
+              <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-gray-500">Time Remaining</span>
+                  <span id="timer" class="text-xl font-bold text-indigo-600"></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div id="timerBar" class="bg-indigo-600 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+                </div>
+              </div>
+              
+              <!-- Question -->
+              <div id="questionText" class="text-xl font-semibold mb-6 text-gray-800"></div>
+              
+              <!-- Answer Options -->
+              <div id="answerOptions" class="grid grid-cols-1 gap-4">
                 <!-- Answer buttons will be added here -->
               </div>
-              <div id="timer" class="mt-4 text-center text-2xl font-bold"></div>
-              <div id="triviaFeedback" class="mt-4 text-center hidden">
-                <div class="correct-feedback text-green-500 hidden">
-                  <svg
-                    class="w-16 h-16 mx-auto mb-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+              
+              <!-- Feedback -->
+              <div id="triviaFeedback" class="mt-6 text-center hidden">
+                <div class="correct-feedback text-green-500 hidden transform transition-all duration-300 scale-100">
+                  <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                   <p class="text-xl font-bold">Correct!</p>
                 </div>
-                <div class="wrong-feedback text-red-500 hidden">
-                  <svg
-                    class="w-16 h-16 mx-auto mb-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                <div class="wrong-feedback text-red-500 hidden transform transition-all duration-300 scale-100">
+                  <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                   <p class="text-xl font-bold">Wrong!</p>
+                  <p class="text-gray-500 mt-2">The correct answer will be revealed soon...</p>
                 </div>
+              </div>
+              
+              <!-- Answer Status -->
+              <div class="mt-6 text-center text-sm text-gray-500" id="answerStatus">
+                Waiting for other players...
+                <span id="answeredCount" class="font-medium">0/0</span>
               </div>
             </div>
           </div>
         </div>
 
-    <!-- CHASE SCREEN: START NEW SNIPPET -->
+    <!-- Chase Game Screen -->
 <div id="chaseScreen" class="hidden">
     <div class="max-w-2xl mx-auto">
       <div class="bg-white rounded-xl shadow-lg p-6">
         <!-- Info at top: role + category -->
         <div id="chaseInfo" class="text-center mb-4">
-          <!-- e.g. "You are the Chaser!" or "You are the Contestant!" -->
-          <div id="chaseRole" class="text-xl font-bold mb-2"></div>
-          <!-- e.g. "Category: Animals" -->
+          <div id="chaseRole" class="text-2xl font-bold mb-2 text-indigo-600"></div>
           <div id="chaseStatus" class="text-gray-600"></div>
         </div>
-  
+
+        <!-- Game Board -->
+        <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6 bg-gray-100 p-4 rounded-xl">
+          <!-- Board positions will be dynamically added -->
+        </div>
+
+        <!-- Question Section -->
+        <div id="chaseQuestion" class="bg-gray-50 rounded-xl p-6 mb-6">
+          <p class="text-lg font-medium mb-4"></p>
+          <div id="chaseAnswers" class="grid grid-cols-1 gap-3">
+            <!-- Answer buttons will be dynamically added -->
+          </div>
+        </div>
+
+        <!-- Timer -->
+        <div id="chaseTimer" class="text-center text-2xl font-bold text-indigo-600"></div>
+
+        <!-- Feedback -->
+        <div id="chaseFeedback" class="mt-4 text-center hidden">
+          <div class="correct-feedback text-green-500 hidden">
+            <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-xl font-bold">Correct!</p>
+          </div>
+          <div class="wrong-feedback text-red-500 hidden">
+            <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-xl font-bold">Wrong!</p>
+          </div>
+        </div>
         <!-- Board (7 columns default) -->
         <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
           <!-- Dynamically created cells go here -->
@@ -502,22 +527,48 @@
           <div class="max-w-2xl mx-auto">
             <div class="bg-white rounded-xl shadow-lg p-6">
               <div id="drawingPrompt" class="text-center mb-4">
-                <div
-                  id="drawingWord"
-                  class="text-2xl font-bold mb-2"
-                ></div>
-                <div
-                  id="drawingTurn"
-                  class="text-gray-600"
-                ></div>
+                <div id="drawingWord" class="text-2xl font-bold text-indigo-600 mb-2"></div>
+                <div id="drawingTurn" class="text-gray-600"></div>
+                <div id="drawingTimer" class="text-xl font-bold mt-2 text-indigo-600"></div>
               </div>
-              <canvas
-                id="drawingCanvas"
-                class="drawing-canvas border-2 border-gray-200 rounded-lg mb-4"
+              
+              <div class="drawing-area relative bg-white rounded-lg overflow-hidden mb-6">
+                <canvas
+                  id="drawingCanvas"
+                  class="drawing-canvas mx-auto border-2 border-gray-200 rounded-lg touch-none shadow-inner"
               ></canvas>
-              <div
-                id="drawingTools"
-                class="grid grid-cols-4 gap-4 mb-4"
+                
+                <!-- Drawing Tools -->
+                <div class="drawing-tools fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-4 shadow-lg border-t border-gray-200">
+                  <div class="max-w-2xl mx-auto flex flex-wrap items-center justify-between gap-4">
+                    <!-- Color Picker -->
+                    <div class="flex space-x-2">
+                      <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" style="background-color: #000000" data-color="#000000"></button>
+                      <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" style="background-color: #FF0000" data-color="#FF0000"></button>
+                      <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" style="background-color: #00FF00" data-color="#00FF00"></button>
+                      <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" style="background-color: #0000FF" data-color="#0000FF"></button>
+                      <button class="w-8 h-8 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" style="background-color: #FFFF00" data-color="#FFFF00"></button>
+                    </div>
+                    
+                    <!-- Tools -->
+                    <div class="flex space-x-2">
+                      <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" data-tool="brush">
+                        <i class="fas fa-paint-brush text-gray-600"></i>
+                      </button>
+                      <button class="tool-btn w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" data-tool="eraser">
+                        <i class="fas fa-eraser text-gray-600"></i>
+                      </button>
+                      <button class="w-10 h-10 rounded-lg bg-white border-2 border-gray-300 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95" onclick="window.gameState.clearCanvas()">
+                        <i class="fas fa-trash-alt text-gray-600"></i>
+                      </button>
+                    </div>
+                    
+                    <!-- Size Slider -->
+                    <div class="w-full sm:w-auto flex-1 max-w-xs">
+                      <input type="range" id="brushSize" min="1" max="20" value="4" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                  </div>
+                </div>
               >
                 <div class="col-span-3 grid grid-cols-3 gap-2">
                   <!-- Color buttons -->
@@ -627,11 +678,17 @@
 
   <!-- Main Script -->
   <script>
-    // Main game state object
-    const gameState = {
+    // Initialize game state globally
+    window.gameState = {
       socket: null,
       roomId: "{{ room_id }}",
       hasJoined: false,
+      profileCanvas: null,
+      profileCtx: null,
+      profileIsDrawing: false,
+      profileLastX: 0,
+      profileLastY: 0,
+      profileTool: 'brush',
       debugVisible: false,
       currentGame: null,
       isDrawer: false,
@@ -647,11 +704,11 @@
       init() {
         console.log("Initializing game with room ID:", this.roomId);
 
-        // 1) Initialize Socket
-        this.initSocket();
+        // 1) Initialize Profile Canvas
+        this.initProfileCanvas();
 
-        // 2) Profile Drawing
-        this.initProfileDrawing();
+        // 2) Initialize Socket
+        this.initSocket();
 
         // 3) Keyboard Listeners
         this.addKeyboardListeners();
@@ -671,6 +728,114 @@
       /****************************************
        *             SOCKET SETUP
        ****************************************/
+      // Initialize profile canvas
+      initProfileCanvas() {
+        this.profileCanvas = document.getElementById("profileCanvas");
+        this.profileCtx = this.profileCanvas.getContext("2d");
+        
+        // Set initial drawing style
+        this.profileCtx.strokeStyle = "#000000";
+        this.profileCtx.lineWidth = 4;
+        this.profileCtx.lineCap = "round";
+        this.profileCtx.lineJoin = "round";
+
+        // Drawing function
+        const draw = (e) => {
+          if (!this.profileIsDrawing) return;
+          e.preventDefault();
+
+          const rect = this.profileCanvas.getBoundingClientRect();
+          const x = ((e.clientX || e.touches[0].clientX) - rect.left) * (this.profileCanvas.width / rect.width);
+          const y = ((e.clientY || e.touches[0].clientY) - rect.top) * (this.profileCanvas.height / rect.height);
+
+          this.profileCtx.beginPath();
+          this.profileCtx.moveTo(this.profileLastX, this.profileLastY);
+          this.profileCtx.lineTo(x, y);
+
+          if (this.profileTool === 'eraser') {
+            this.profileCtx.save();
+            this.profileCtx.strokeStyle = '#FFFFFF';
+            this.profileCtx.lineWidth = this.profileCtx.lineWidth * 2;
+            this.profileCtx.stroke();
+            this.profileCtx.restore();
+          } else {
+            this.profileCtx.stroke();
+          }
+
+          [this.profileLastX, this.profileLastY] = [x, y];
+        };
+
+        // Mouse events
+        this.profileCanvas.addEventListener("mousedown", (e) => {
+          this.profileIsDrawing = true;
+          const rect = this.profileCanvas.getBoundingClientRect();
+          [this.profileLastX, this.profileLastY] = [
+            (e.clientX - rect.left) * (this.profileCanvas.width / rect.width),
+            (e.clientY - rect.top) * (this.profileCanvas.height / rect.height)
+          ];
+        });
+        this.profileCanvas.addEventListener("mousemove", draw);
+        this.profileCanvas.addEventListener("mouseup", () => this.profileIsDrawing = false);
+        this.profileCanvas.addEventListener("mouseout", () => this.profileIsDrawing = false);
+
+        // Touch events
+        this.profileCanvas.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          this.profileIsDrawing = true;
+          const rect = this.profileCanvas.getBoundingClientRect();
+          [this.profileLastX, this.profileLastY] = [
+            (e.touches[0].clientX - rect.left) * (this.profileCanvas.width / rect.width),
+            (e.touches[0].clientY - rect.top) * (this.profileCanvas.height / rect.height)
+          ];
+        });
+        this.profileCanvas.addEventListener("touchmove", draw);
+        this.profileCanvas.addEventListener("touchend", () => this.profileIsDrawing = false);
+
+        // Color picker
+        const colorButtons = document.querySelectorAll("[data-color]");
+        colorButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            this.profileCtx.strokeStyle = button.dataset.color;
+            this.profileTool = 'brush';
+            colorButtons.forEach((btn) =>
+              btn.classList.remove("ring-2", "ring-offset-2")
+            );
+            button.classList.add("ring-2", "ring-offset-2");
+            
+            // Update tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => 
+              btn.classList.remove('bg-gray-100'));
+            document.querySelector('[data-tool="brush"]').classList.add('bg-gray-100');
+          });
+        });
+
+        // Tool buttons
+        const toolButtons = document.querySelectorAll(".tool-btn");
+        toolButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            this.profileTool = button.dataset.tool;
+            toolButtons.forEach((btn) =>
+              btn.classList.remove("bg-gray-100")
+            );
+            button.classList.add("bg-gray-100");
+          });
+        });
+
+        // Brush size slider
+        const sizeSlider = document.getElementById("profileBrushSize");
+        sizeSlider.addEventListener("input", () => {
+          this.profileCtx.lineWidth = sizeSlider.value;
+        });
+      },
+
+      // Clear profile canvas
+      clearProfileCanvas() {
+        if (this.profileCtx) {
+          this.profileCtx.clearRect(0, 0, this.profileCanvas.width, this.profileCanvas.height);
+        }
+      },
+
+      // Initialize socket connection
       initSocket() {
         console.log("Initializing socket connection...");
 
@@ -970,12 +1135,28 @@
       /****************************************
        *         GAME ACTION FUNCTIONS
        ****************************************/
-      submitAnswer(option) {
-        console.log("Submit trivia answer:", option);
-        // Example placeholder
+      submitAnswer(answer) {
+        if (this.hasAnswered) return;
+        this.hasAnswered = true;
+
+        // Disable all answer buttons
+        const buttons = document.querySelectorAll('#answerOptions button');
+        buttons.forEach(button => {
+          button.disabled = true;
+          button.classList.add('opacity-50', 'cursor-not-allowed');
+          if (button.textContent === answer) {
+            button.classList.add('bg-indigo-100', 'border-indigo-500');
+          }
+        });
+
+        // Show waiting message
+        document.getElementById('answerStatus').classList.remove('hidden');
+
+        // Emit answer to server
         this.socket.emit("submit_trivia_answer", {
           room_id: this.roomId,
-          answer: option,
+          answer: answer,
+          time_remaining: parseInt(document.getElementById("timer").textContent)
         });
       },
 
@@ -1093,21 +1274,165 @@
       initDrawingCanvas() {
         const canvas = document.getElementById("drawingCanvas");
         const ctx = canvas.getContext("2d");
+        this.isDrawing = false;
+        this.lastX = 0;
+        this.lastY = 0;
+        this.currentTool = 'brush';
 
         // Adjust canvas size to parent (with ratio)
         const container = canvas.parentElement;
         canvas.width = container.clientWidth;
         canvas.height = container.clientWidth * 0.75;
 
-        // Default styles
+        // Set initial drawing style
         ctx.strokeStyle = "#000000";
         ctx.lineWidth = 4;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
-        // Internal drawing state
-        let isDrawing = false;
-        let lastX = 0;
+        // Drawing functions
+        const draw = (e) => {
+          if (!isDrawing) return;
+          e.preventDefault();
+
+          // Get correct coordinates whether mouse or touch
+          const rect = canvas.getBoundingClientRect();
+          const x = ((e.clientX || e.touches[0].clientX) - rect.left) * (canvas.width / rect.width);
+          const y = ((e.clientY || e.touches[0].clientY) - rect.top) * (canvas.height / rect.height);
+
+          ctx.beginPath();
+          ctx.moveTo(lastX, lastY);
+          ctx.lineTo(x, y);
+
+          if (currentTool === 'eraser') {
+            ctx.save();
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = ctx.lineWidth * 2;
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            ctx.stroke();
+          }
+
+          [lastX, lastY] = [x, y];
+
+          // Send drawing data to server
+          this.socket.emit('drawing_update', {
+            type: 'line',
+            x1: lastX / canvas.width,
+            y1: lastY / canvas.height,
+            x2: x / canvas.width,
+            y2: y / canvas.height,
+            color: ctx.strokeStyle,
+            width: ctx.lineWidth,
+            tool: currentTool
+          });
+        };
+
+        // Event listeners for mouse
+        canvas.addEventListener("mousedown", (e) => {
+          isDrawing = true;
+          const rect = canvas.getBoundingClientRect();
+          [lastX, lastY] = [
+            (e.clientX - rect.left) * (canvas.width / rect.width),
+            (e.clientY - rect.top) * (canvas.height / rect.height)
+          ];
+        });
+        canvas.addEventListener("mousemove", draw);
+        canvas.addEventListener("mouseup", () => (isDrawing = false));
+        canvas.addEventListener("mouseout", () => (isDrawing = false));
+
+        // Event listeners for touch
+        canvas.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          isDrawing = true;
+          const rect = canvas.getBoundingClientRect();
+          [lastX, lastY] = [
+            (e.touches[0].clientX - rect.left) * (canvas.width / rect.width),
+            (e.touches[0].clientY - rect.top) * (canvas.height / rect.height)
+          ];
+        });
+        canvas.addEventListener("touchmove", draw);
+        canvas.addEventListener("touchend", () => (isDrawing = false));
+
+        // Color picker
+        const colorButtons = document.querySelectorAll("[data-color]");
+        colorButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            ctx.strokeStyle = button.dataset.color;
+            currentTool = 'brush';
+            // Remove active class from all buttons
+            colorButtons.forEach((btn) =>
+              btn.classList.remove("ring-2", "ring-offset-2")
+            );
+            // Add active class to clicked button
+            button.classList.add("ring-2", "ring-offset-2");
+            
+            // Update tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => 
+              btn.classList.remove('bg-gray-100'));
+            document.querySelector('[data-tool="brush"]').classList.add('bg-gray-100');
+          });
+        });
+
+        // Tool buttons
+        const toolButtons = document.querySelectorAll(".tool-btn");
+        toolButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            currentTool = button.dataset.tool;
+            // Remove active class from all buttons
+            toolButtons.forEach((btn) =>
+              btn.classList.remove("bg-gray-100")
+            );
+            // Add active class to clicked button
+            button.classList.add("bg-gray-100");
+          });
+        });
+
+        // Brush size slider
+        const sizeSlider = document.getElementById("brushSize");
+        sizeSlider.addEventListener("input", () => {
+          ctx.lineWidth = sizeSlider.value;
+        });
+
+        // Clear canvas button
+        this.clearCanvas = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          this.socket.emit('drawing_update', {
+            type: 'clear'
+          });
+        };
+
+        // Handle incoming drawing updates
+        this.socket.on('drawing_update', (data) => {
+          if (data.type === 'clear') {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+          }
+
+          ctx.beginPath();
+          ctx.moveTo(data.x1 * canvas.width, data.y1 * canvas.height);
+          ctx.lineTo(data.x2 * canvas.width, data.y2 * canvas.height);
+          
+          if (data.tool === 'eraser') {
+            ctx.save();
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = data.width * 2;
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            const originalStyle = ctx.strokeStyle;
+            const originalWidth = ctx.lineWidth;
+            ctx.strokeStyle = data.color;
+            ctx.lineWidth = data.width;
+            ctx.stroke();
+            ctx.strokeStyle = originalStyle;
+            ctx.lineWidth = originalWidth;
+          }
+        });
+
+        // Update internal state
+        [lastX, lastY] = [0, 0];
         let lastY = 0;
 
         // Mouse events
@@ -1197,21 +1522,48 @@
        *             TIMER
        ****************************************/
       startTimer(seconds) {
+        let timeLeft = seconds;
+        const timerEl = document.getElementById("timer");
+        const timerBar = document.getElementById("timerBar");
+        const totalTime = seconds;
+        this.hasAnswered = false;
+
+        // Clear any existing timer
         if (this.timerInterval) {
           clearInterval(this.timerInterval);
         }
 
-        const existingTimer = document.getElementById("timer");
-        if (!existingTimer) {
-          const gameArea = document.getElementById("gameArea");
-          const timerDiv = document.createElement("div");
-          timerDiv.id = "timer";
-          timerDiv.className =
-            "fixed top-4 left-4 bg-white p-4 rounded-lg shadow-lg text-2xl font-bold";
-          gameArea.appendChild(timerDiv);
-        }
+        // Update timer every second
+        this.timerInterval = setInterval(() => {
+          timerEl.textContent = timeLeft + "s";
+          const percentage = (timeLeft / totalTime) * 100;
+          timerBar.style.width = percentage + "%";
+          
+          // Change color based on time remaining
+          if (percentage > 66) {
+            timerBar.classList.remove("bg-yellow-500", "bg-red-500");
+            timerBar.classList.add("bg-indigo-600");
+          } else if (percentage > 33) {
+            timerBar.classList.remove("bg-indigo-600", "bg-red-500");
+            timerBar.classList.add("bg-yellow-500");
+          } else {
+            timerBar.classList.remove("bg-indigo-600", "bg-yellow-500");
+            timerBar.classList.add("bg-red-500");
+          }
+          
+          timeLeft--;
 
-        let timeLeft = seconds;
+          if (timeLeft < 0) {
+            clearInterval(this.timerInterval);
+            timerEl.textContent = "Time's up!";
+            timerBar.style.width = "0%";
+            
+            // Auto-submit if no answer was given
+            if (!this.hasAnswered) {
+              this.submitAnswer(null);
+            }
+          }
+        }, 1000);
         const updateTimer = () => {
           const timerElement = document.getElementById("timer");
           if (!timerElement) return;
