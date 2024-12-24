@@ -233,6 +233,9 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
 
             elif game_type == 'trivia':
                 room.current_question = room.get_next_question()
+                room.player_answers = {}  # Reset answers for new question
+                room.round_start_time = datetime.now()  # Start timer
+                
                 # Broadcast to all players
                 await sio.emit('game_started', {
                     'game_type': 'trivia',
@@ -241,7 +244,8 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     'question': room.current_question,
                     'time_limit': _get_trivia_time_limit(len(active_players)),
                     'game_state': 'playing',
-                    'scores': room.scores
+                    'scores': room.scores,
+                    'start_time': room.round_start_time.timestamp()
                 }, room=room_id)
 
             elif game_type == 'chase':
@@ -427,7 +431,7 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
         try:
             room_id = data['room_id']
             answer = data['answer']
-            answer_time = data.get('answer_time')  # optional
+            answer_time = data.get('answer_time')  # Time taken to answer
 
             if room_id not in rooms:
                 return
@@ -435,40 +439,81 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
             if room.current_game != 'trivia' or room.game_state != 'playing':
                 return
 
+            # Check if answer is within time limit
+            elapsed_time = (datetime.now() - room.round_start_time).total_seconds()
+            time_limit = _get_trivia_time_limit(len([p for p in room.players.values() if p['connected'] and not p.get('is_host')]))
+            if elapsed_time > time_limit:
+                await sio.emit('answer_feedback', {
+                    'error': 'Time expired',
+                    'correct_answer': room.current_question['correct']
+                }, room=sid)
+                return
+
             # Check if they've already answered
             if sid in room.player_answers:
                 return  # ignore
 
-            # Mark answer
-            room.player_answers[sid] = answer
+            # Store answer with timing info
+            room.player_answers[sid] = {
+                'answer': answer,
+                'time': answer_time or elapsed_time
+            }
+
+            # Calculate score with time bonus
             is_correct = (answer == room.current_question['correct'])
             scoring = room.calculate_score(sid, is_correct, answer_time)
             room.scores[sid] = room.scores.get(sid, 0) + scoring['total_score']
 
-            # Immediate feedback
-            await sio.emit('answer_result', {
+            # Immediate feedback to the player
+            await sio.emit('answer_feedback', {
                 'correct': is_correct,
                 'score': scoring['total_score'],
-                'streak': room.player_streaks.get(sid, 0)
+                'streak': room.player_streaks.get(sid, 0),
+                'time_bonus': scoring.get('time_bonus', 0),
+                'correct_answer': room.current_question['correct'] if not is_correct else None
             }, room=sid)
 
-            # If all active have answered
+            # Update all players on answer progress
             active_players = [pid for pid, p in room.players.items() if p['connected'] and not p.get('is_host')]
-            if len(room.player_answers) >= len(active_players):
+            await sio.emit('answer_progress', {
+                'answered': len(room.player_answers),
+                'total': len(active_players)
+            }, room=room_id)
+
+            # If everyone has answered or time is up
+            if len(room.player_answers) >= len(active_players) or elapsed_time >= time_limit:
+                # Calculate stats for this question
+                answer_stats = {
+                    'correct_count': sum(1 for ans in room.player_answers.values() 
+                                      if ans['answer'] == room.current_question['correct']),
+                    'fastest_time': min(ans['time'] for ans in room.player_answers.values()),
+                    'average_time': sum(ans['time'] for ans in room.player_answers.values()) / len(room.player_answers)
+                }
+
                 # End of round
                 await sio.emit('round_complete', {
                     'question': room.current_question,
                     'answers': {
-                        room.players[p]['name']: ans for p, ans in room.player_answers.items()
+                        room.players[p]['name']: ans['answer'] for p, ans in room.player_answers.items()
                     },
-                    'scores': room.scores
+                    'scores': room.scores,
+                    'stats': answer_stats
                 }, room=room_id)
 
                 # Check if final round
                 if room.round >= room.total_rounds:
+                    # Calculate final achievements and stats
+                    final_stats = {
+                        'perfect_scores': sum(1 for score in room.scores.values() if score >= room.total_rounds * GAME_CONFIG['points']['correct_trivia']),
+                        'total_correct': sum(1 for ans in room.player_answers.values() if ans['answer'] == room.current_question['correct']),
+                        'fastest_player': min(((sid, ans['time']) for sid, ans in room.player_answers.items()), key=lambda x: x[1])[0]
+                    }
+                    
                     await sio.emit('game_complete', {
                         'final_scores': room.scores,
-                        'winner': _highest_scorer_name(room)
+                        'winner': _highest_scorer_name(room),
+                        'achievements': room.achievements,
+                        'stats': final_stats
                     }, room=room_id)
                     room.game_state = 'waiting'
                     room.current_game = None
@@ -477,6 +522,16 @@ def register_socket_events(sio: socketio.AsyncServer, rooms: Dict[str, GameRoom]
                     room.round += 1
                     room.reset_round()
                     room.current_question = room.get_next_question()
+                    room.round_start_time = datetime.now()  # Reset timer
+                    
+                    # Send next question with synchronized start time
+                    await sio.emit('next_question', {
+                        'question': room.current_question,
+                        'round': room.round,
+                        'time_limit': time_limit,
+                        'start_time': room.round_start_time.timestamp(),
+                        'total_rounds': room.total_rounds
+                    }, room=room_id)
 
                     await sio.emit('round_start', {
                         'round': room.round,

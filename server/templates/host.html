@@ -129,10 +129,23 @@
                                         <div class="w-10 h-10 bg-blue-500 rounded-full shadow-lg flex items-center justify-center text-white font-bold"></div>
                                     </div>
                                 </div>
+                                
+                                <!-- Prize Display -->
+                                <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-6">
+                                    <div class="bg-yellow-500 text-black font-bold px-4 py-1 rounded-full shadow-lg">
+                                        £<span id="chasePrize">0</span>
+                                    </div>
+                                </div>
                             </div>
                             
                             <!-- Question Section -->
                             <div id="chaseQuestion" class="bg-gray-800 rounded-xl p-6 mb-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <span class="text-sm font-medium text-gray-400">Question <span id="chaseQuestionNumber">1</span>/<span id="chaseTotalQuestions">5</span></span>
+                                    <div id="chaseTimePressure" class="hidden">
+                                        <span class="bg-red-500 text-white text-sm px-3 py-1 rounded-full animate-pulse">Time Pressure!</span>
+                                    </div>
+                                </div>
                                 <p class="text-lg font-medium text-white mb-4"></p>
                                 <div id="chaseAnswers" class="grid grid-cols-1 gap-3">
                                     <!-- Answer stats will be shown here -->
@@ -140,17 +153,53 @@
                             </div>
                             
                             <!-- Timer -->
-                            <div id="chaseTimer" class="text-xl font-bold text-center text-white"></div>
+                            <div class="mb-6">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-400">Time Remaining</span>
+                                    <span id="chaseTimer" class="text-xl font-bold text-white"></span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="chaseTimerBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-100" style="width: 100%"></div>
+                                </div>
+                            </div>
                             
                             <!-- Player Info -->
                             <div class="mt-6 grid grid-cols-2 gap-4">
                                 <div class="bg-gray-700 rounded-lg p-4">
                                     <h4 class="text-sm font-medium text-gray-300 mb-2">Chaser</h4>
                                     <p id="chaserName" class="text-lg font-bold text-white"></p>
+                                    <div class="mt-2 text-sm text-gray-400">
+                                        Correct: <span id="chaserCorrect">0</span>
+                                    </div>
                                 </div>
                                 <div class="bg-gray-700 rounded-lg p-4">
                                     <h4 class="text-sm font-medium text-gray-300 mb-2">Contestant</h4>
                                     <p id="contestantName" class="text-lg font-bold text-white"></p>
+                                    <div class="mt-2 text-sm text-gray-400">
+                                        Correct: <span id="contestantCorrect">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Power-ups -->
+                            <div id="chasePowerUps" class="mt-6">
+                                <h4 class="text-sm font-medium text-gray-400 mb-3">Power-ups Available</h4>
+                                <div class="grid grid-cols-3 gap-4">
+                                    <div class="bg-gray-700 rounded-lg p-3 text-center">
+                                        <div class="text-yellow-500 text-xl mb-1">⚡</div>
+                                        <div class="text-sm text-white">Double Steps</div>
+                                        <div id="powerUpDoubleSteps" class="text-xs text-gray-400">1 left</div>
+                                    </div>
+                                    <div class="bg-gray-700 rounded-lg p-3 text-center">
+                                        <div class="text-blue-500 text-xl mb-1">🛡️</div>
+                                        <div class="text-sm text-white">Shield</div>
+                                        <div id="powerUpShield" class="text-xs text-gray-400">1 left</div>
+                                    </div>
+                                    <div class="bg-gray-700 rounded-lg p-3 text-center">
+                                        <div class="text-purple-500 text-xl mb-1">⏰</div>
+                                        <div class="text-sm text-white">Time Freeze</div>
+                                        <div id="powerUpTimeFreeze" class="text-xs text-gray-400">1 left</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -169,7 +218,17 @@
                                     <span id="triviaTimer" class="text-xl font-bold text-white"></span>
                                 </div>
                                 <div class="w-full bg-gray-700 rounded-full h-2">
-                                    <div id="triviaTimerBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+                                    <div id="triviaTimerBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-100" style="width: 100%"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Round Info -->
+                            <div class="flex justify-between items-center mb-4">
+                                <div class="text-sm font-medium text-gray-400">
+                                    Round <span id="triviaCurrentRound">1</span>/<span id="triviaTotalRounds">5</span>
+                                </div>
+                                <div class="text-sm font-medium text-gray-400">
+                                    Difficulty: <span id="triviaDifficulty" class="text-indigo-400">Easy</span>
                                 </div>
                             </div>
                             
@@ -187,10 +246,34 @@
                             <div class="mt-6">
                                 <div class="flex justify-between items-center mb-2">
                                     <span class="text-sm font-medium text-gray-400">Players Answered</span>
-                                    <span id="triviaProgress" class="text-white font-medium">0/0</span>
+                                    <div class="flex items-center">
+                                        <span id="triviaProgress" class="text-white font-medium mr-2">0/0</span>
+                                        <div id="triviaWaitingSpinner" class="hidden">
+                                            <svg class="animate-spin h-4 w-4 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="w-full bg-gray-700 rounded-full h-2">
                                     <div id="triviaProgressBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Answer Stats -->
+                            <div id="triviaStats" class="mt-6 grid grid-cols-3 gap-4 text-center">
+                                <div class="bg-gray-700 rounded-lg p-3">
+                                    <div class="text-sm text-gray-400">Correct</div>
+                                    <div id="triviaCorrectCount" class="text-xl font-bold text-green-500">0</div>
+                                </div>
+                                <div class="bg-gray-700 rounded-lg p-3">
+                                    <div class="text-sm text-gray-400">Fastest</div>
+                                    <div id="triviaFastestTime" class="text-xl font-bold text-yellow-500">0.0s</div>
+                                </div>
+                                <div class="bg-gray-700 rounded-lg p-3">
+                                    <div class="text-sm text-gray-400">Average</div>
+                                    <div id="triviaAverageTime" class="text-xl font-bold text-blue-500">0.0s</div>
                                 </div>
                             </div>
                         </div>
