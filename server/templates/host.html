@@ -125,21 +125,61 @@
     <div class="container mx-auto px-4 py-8">
         <div class="game-container p-8 max-w-4xl mx-auto">
             <div id="waitingState">
-                <h2 class="text-2xl font-bold text-center mb-4">Waiting for Players</h2>
-                <div id="playerList" class="space-y-2"></div>
-                <div class="mt-8 text-center">
-                    <button onclick="PartyGames.startGame('chinese_whispers')" 
-                            class="bg-indigo-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-indigo-700 transition">
-                        Start Drawing Game
-                    </button>
-                    <button onclick="PartyGames.startGame('trivia')" 
-                            class="bg-purple-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-purple-700 transition">
-                        Start Trivia Game
-                    </button>
-                    <button onclick="PartyGames.startGame('chase')" 
-                            class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition">
-                        Start Chase Game
-                    </button>
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-bold text-indigo-600 mb-4">Game Room</h1>
+                    <p class="text-xl text-gray-600">Room Code: <span class="font-bold">{{ room_id }}</span></p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left Column: Join Info -->
+                    <div class="text-center lg:col-span-1">
+                        <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
+                        <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4 mx-auto max-w-[200px]">
+                        <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
+                    </div>
+
+                    <!-- Middle Column: Game Controls -->
+                    <div class="lg:col-span-1">
+                        <h2 class="text-xl font-bold mb-4 text-indigo-600 text-center">Start Game</h2>
+                        <div class="space-y-4">
+                            <button onclick="PartyGames.startGame('chinese_whispers')" 
+                                    class="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition">
+                                Start Drawing Game
+                            </button>
+                            <button onclick="PartyGames.startGame('trivia')" 
+                                    class="w-full bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition">
+                                Start Trivia Game
+                            </button>
+                            <button onclick="PartyGames.startGame('chase')" 
+                                    class="w-full bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition">
+                                Start Chase Game
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Players -->
+                    <div class="lg:col-span-1">
+                        <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
+                        <div id="playerList" class="player-list p-4 min-h-[400px] space-y-3 bg-white/50 rounded-lg">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
+                                <div class="text-sm text-gray-500" id="minPlayersStatus">
+                                    Need 2+ players to start
+                                </div>
+                            </div>
+                            <div id="playerGrid" class="grid grid-cols-1 gap-3">
+                                <!-- Players will be added here dynamically -->
+                            </div>
+                            <div id="emptyState" class="text-center py-8">
+                                <div class="text-gray-400">
+                                    <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                    </svg>
+                                    <p>Waiting for players to join...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -469,23 +509,46 @@
 
                 // Player list management
                 updatePlayerList(players) {
-                    const playerGrid = document.getElementById('playerList');
-                    if (!playerGrid) return;
+                    const playerGrid = document.getElementById('playerGrid');
+                    const emptyState = document.getElementById('emptyState');
+                    const playerCount = document.getElementById('playerCount');
+                    const minPlayersStatus = document.getElementById('minPlayersStatus');
                     
+                    if (!playerGrid || !emptyState || !playerCount || !minPlayersStatus) return;
+                    
+                    // Update player count
+                    const count = players.length;
+                    playerCount.textContent = count;
+                    
+                    // Update min players status
+                    if (count < 2) {
+                        minPlayersStatus.textContent = 'Need 2+ players to start';
+                        minPlayersStatus.className = 'text-sm text-red-500';
+                    } else {
+                        minPlayersStatus.textContent = 'Ready to start!';
+                        minPlayersStatus.className = 'text-sm text-green-500';
+                    }
+                    
+                    // Show/hide empty state
+                    emptyState.classList.toggle('hidden', count > 0);
+                    
+                    // Update player grid
                     playerGrid.innerHTML = '';
                     players.forEach(player => {
                         const playerElement = document.createElement('div');
-                        playerElement.className = 'flex items-center justify-between bg-white/50 rounded-lg p-3';
+                        playerElement.className = 'flex items-center justify-between bg-white/80 rounded-lg p-3 shadow-sm';
                         playerElement.innerHTML = `
-                            <span class="font-medium">${player.name}</span>
-                            <span class="text-sm text-gray-600">${player.score || 0} pts</span>
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 rounded-full bg-green-500 mr-3"></div>
+                                <span class="font-medium">${player.name}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-sm text-gray-600 mr-2">${player.score || 0} pts</span>
+                                ${player.is_host ? '<span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">Host</span>' : ''}
+                            </div>
                         `;
                         playerGrid.appendChild(playerElement);
                     });
-                    
-                    // Update player count
-                    const playerCount = document.getElementById('playerCount');
-                    if (playerCount) playerCount.textContent = players.length;
                 },
 
                 // Game start
