@@ -111,13 +111,46 @@
                                 <h3 class="text-2xl font-bold">The Chase</h3>
                                 <p id="chaseStatus" class="text-gray-400"></p>
                             </div>
-                            <div id="chaseBoard" class="grid grid-cols-7 gap-2 mb-6">
-                                <!-- Chase board positions will be added here -->
+                            
+                            <!-- Game Board -->
+                            <div class="relative mb-6">
+                                <div id="chaseBoard" class="grid grid-cols-7 gap-2 bg-gray-800 p-4 rounded-xl">
+                                    <!-- Board positions will be dynamically added -->
+                                </div>
+                                
+                                <!-- Player Markers -->
+                                <div id="chaseMarkers" class="absolute inset-0 pointer-events-none">
+                                    <div id="chaserMarker" class="absolute transition-all duration-500 ease-in-out">
+                                        <div class="w-10 h-10 bg-red-500 rounded-full shadow-lg flex items-center justify-center text-white font-bold">C</div>
+                                    </div>
+                                    <div id="contestantMarker" class="absolute transition-all duration-500 ease-in-out">
+                                        <div class="w-10 h-10 bg-blue-500 rounded-full shadow-lg flex items-center justify-center text-white font-bold"></div>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="chaseQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
-                                <p class="text-lg font-medium"></p>
+                            
+                            <!-- Question Section -->
+                            <div id="chaseQuestion" class="bg-gray-800 rounded-xl p-6 mb-6">
+                                <p class="text-lg font-medium text-white mb-4"></p>
+                                <div id="chaseAnswers" class="grid grid-cols-1 gap-3">
+                                    <!-- Answer stats will be shown here -->
+                                </div>
                             </div>
-                            <div id="chaseTimer" class="text-xl font-bold text-center"></div>
+                            
+                            <!-- Timer -->
+                            <div id="chaseTimer" class="text-xl font-bold text-center text-white"></div>
+                            
+                            <!-- Player Info -->
+                            <div class="mt-6 grid grid-cols-2 gap-4">
+                                <div class="bg-gray-700 rounded-lg p-4">
+                                    <h4 class="text-sm font-medium text-gray-300 mb-2">Chaser</h4>
+                                    <p id="chaserName" class="text-lg font-bold text-white"></p>
+                                </div>
+                                <div class="bg-gray-700 rounded-lg p-4">
+                                    <h4 class="text-sm font-medium text-gray-300 mb-2">Contestant</h4>
+                                    <p id="contestantName" class="text-lg font-bold text-white"></p>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Trivia Game State -->
@@ -141,11 +174,25 @@
                                 <h3 class="text-2xl font-bold">Chinese Whispers</h3>
                                 <p id="drawingTurn" class="text-gray-400"></p>
                             </div>
-                            <div id="drawingDisplay" class="bg-white rounded-lg aspect-video mb-4">
-                                <!-- Drawing will be shown here -->
+                            <div class="drawing-area relative bg-white rounded-lg overflow-hidden mb-6">
+                                <canvas
+                                    id="drawingDisplay"
+                                    class="drawing-canvas mx-auto border-2 border-gray-200 rounded-lg shadow-inner"
+                                    width="800"
+                                    height="600"
+                                ></canvas>
                             </div>
                             <div id="drawingWord" class="text-center text-xl font-bold"></div>
                             <div id="drawingTimer" class="text-xl font-bold text-center mt-4"></div>
+                            <div id="drawingProgress" class="mt-4">
+                                <div class="flex justify-between text-sm text-gray-500 mb-2">
+                                    <span>Progress</span>
+                                    <span id="drawingProgressText">0/0 Players</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div id="drawingProgressBar" class="bg-indigo-600 h-2.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1043,6 +1090,46 @@
         socket.on('next_player', (data) => {
             playSound('next_player');
             updateCurrentPlayer(data);
+            
+            // Clear the canvas for the new player
+            const canvas = document.getElementById('drawingDisplay');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update progress
+            const progressBar = document.getElementById('drawingProgressBar');
+            const progressText = document.getElementById('drawingProgressText');
+            progressBar.style.width = `${(data.current_player / data.total_players) * 100}%`;
+            progressText.textContent = `${data.current_player}/${data.total_players} Players`;
+        });
+
+        // Handle drawing updates
+        socket.on('drawing_update', (data) => {
+            const canvas = document.getElementById('drawingDisplay');
+            const ctx = canvas.getContext('2d');
+
+            if (data.type === 'clear') {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(data.x1 * canvas.width, data.y1 * canvas.height);
+            ctx.lineTo(data.x2 * canvas.width, data.y2 * canvas.height);
+            
+            if (data.tool === 'eraser') {
+                ctx.save();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = data.width * 2;
+                ctx.stroke();
+                ctx.restore();
+            } else {
+                ctx.strokeStyle = data.color;
+                ctx.lineWidth = data.width;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+            }
         });
 
         socket.on('all_drawings_complete', (data) => {
@@ -1056,13 +1143,73 @@
         });
 
         socket.on('chase_started', (data) => {
-            document.getElementById('chaserName').textContent = data.chaser;
-            document.getElementById('chaseCategory').textContent = data.category;
+            playSound('game_start');
+            
+            // Show chase state
+            document.getElementById('waitingState').classList.add('hidden');
+            document.getElementById('triviaState').classList.add('hidden');
+            document.getElementById('drawingState').classList.add('hidden');
+            document.getElementById('chaseState').classList.remove('hidden');
+            
+            // Update player info
+            document.getElementById('chaserName').textContent = data.chaser_name;
+            document.getElementById('contestantName').textContent = data.contestant_name;
+            document.getElementById('chaseStatus').textContent = `Round ${data.round} - ${data.category}`;
+            
+            // Create board
+            const board = document.getElementById('chaseBoard');
+            board.innerHTML = '';
+            for (let i = 0; i < 7; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'aspect-square bg-gray-700 rounded-lg';
+                board.appendChild(cell);
+            }
+            
+            // Position markers
+            updateMarkerPositions(data.chaser_position, data.contestant_position);
         });
+        
+        function updateMarkerPositions(chaserPos, contestantPos) {
+            const board = document.getElementById('chaseBoard');
+            const cellWidth = board.children[0].offsetWidth;
+            const cellHeight = board.children[0].offsetHeight;
+            const gap = parseInt(getComputedStyle(board).gap);
+            
+            const chaserMarker = document.getElementById('chaserMarker');
+            const contestantMarker = document.getElementById('contestantMarker');
+            
+            // Calculate positions (0 is rightmost, 6 is leftmost)
+            const chaserX = board.offsetWidth - (cellWidth + gap) * chaserPos - cellWidth/2 - 20;
+            const contestantX = board.offsetWidth - (cellWidth + gap) * contestantPos - cellWidth/2 - 20;
+            const y = cellHeight/2 - 20;
+            
+            chaserMarker.style.transform = `translate(${chaserX}px, ${y}px)`;
+            contestantMarker.style.transform = `translate(${contestantX}px, ${y}px)`;
+        }
 
         socket.on('chase_question', (data) => {
-            const gameContent = document.getElementById('gameContent');
-            gameContent.innerHTML = `
+            // Update question text
+            const questionEl = document.querySelector('#chaseQuestion p');
+            questionEl.textContent = data.question;
+            
+            // Update answer options
+            const answersEl = document.getElementById('chaseAnswers');
+            answersEl.innerHTML = '';
+            
+            data.options.forEach((option, index) => {
+                const button = document.createElement('div');
+                button.className = 'bg-gray-700 p-4 rounded-lg text-white flex justify-between items-center';
+                button.innerHTML = `
+                    <span class="text-lg">${option}</span>
+                    <span id="answer-${index}-count" class="bg-gray-600 px-3 py-1 rounded-full text-sm">0</span>
+                `;
+                answersEl.appendChild(button);
+            });
+            
+            // Start timer if provided
+            if (data.time_limit) {
+                startTimer(data.time_limit);
+            }
                 <div class="bg-white p-6 rounded-lg shadow-lg">
                     <div class="flex justify-between items-center mb-4">
                         <div class="text-lg font-bold">Contestant: ${data.contestant}</div>
@@ -1092,11 +1239,41 @@
         });
 
         socket.on('chase_answer', (data) => {
-            const result = data.result;
-            const gameContent = document.getElementById('gameContent');
-            const answerDiv = document.createElement('div');
-            answerDiv.className = 'mt-4 p-4 rounded-lg ' + 
-                                (result.is_correct ? 'bg-green-100' : 'bg-red-100');
+            // Update answer counts
+            data.answers.forEach((count, index) => {
+                const countEl = document.getElementById(`answer-${index}-count`);
+                countEl.textContent = count;
+            });
+            
+            // Highlight correct answer
+            const answersEl = document.getElementById('chaseAnswers');
+            const answerButtons = answersEl.children;
+            
+            for (let i = 0; i < answerButtons.length; i++) {
+                const button = answerButtons[i];
+                if (i === data.correct_answer) {
+                    button.classList.add('bg-green-700');
+                } else {
+                    button.classList.add('bg-red-700');
+                }
+            }
+            
+            // Update positions
+            updateMarkerPositions(data.chaser_position, data.contestant_position);
+            
+            // Show feedback
+            const status = document.getElementById('chaseStatus');
+            if (data.game_over) {
+                if (data.contestant_caught) {
+                    status.textContent = 'Game Over - Contestant Caught!';
+                    playSound('game_over');
+                } else {
+                    status.textContent = 'Game Over - Contestant Escaped!';
+                    playSound('victory');
+                }
+            } else {
+                status.textContent = `Round ${data.round} - Next question in ${data.next_question_delay}s...`;
+            }
             answerDiv.innerHTML = `
                 <p class="font-bold">${data.player}'s Answer: ${data.answer}</p>
                 <p class="mt-2">${result.is_correct ? 'Correct!' : 'Incorrect! The correct answer was: ' + result.correct_answer}</p>
@@ -1115,8 +1292,42 @@
         });
 
         socket.on('chase_complete', (data) => {
-            const gameContent = document.getElementById('gameContent');
-            gameContent.innerHTML = `
+            // Clear question and answers
+            document.querySelector('#chaseQuestion p').textContent = '';
+            document.getElementById('chaseAnswers').innerHTML = '';
+            
+            // Update status
+            const status = document.getElementById('chaseStatus');
+            if (data.contestant_caught) {
+                status.textContent = 'Game Over - Contestant Caught!';
+                playSound('game_over');
+            } else {
+                status.textContent = 'Game Over - Contestant Escaped!';
+                playSound('victory');
+            }
+            
+            // Show final positions
+            updateMarkerPositions(data.chaser_position, data.contestant_position);
+            
+            // Show game stats
+            const questionEl = document.querySelector('#chaseQuestion p');
+            questionEl.innerHTML = `
+                <div class="text-center">
+                    <h3 class="text-xl font-bold mb-4">Game Results</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="font-medium">Contestant</p>
+                            <p class="text-2xl">${data.contestant_score}</p>
+                            <p class="text-sm text-gray-400">correct answers</p>
+                        </div>
+                        <div>
+                            <p class="font-medium">Chaser</p>
+                            <p class="text-2xl">${data.chaser_score}</p>
+                            <p class="text-sm text-gray-400">correct answers</p>
+                        </div>
+                    </div>
+                </div>
+            `;
                 <div class="bg-white p-6 rounded-lg shadow-lg text-center">
                     <h3 class="text-2xl font-bold mb-4">Chase Complete!</h3>
                     <div class="text-xl mb-6 ${data.winner === 'contestant' ? 'text-green-600' : 'text-red-600'}">
@@ -1136,7 +1347,21 @@
         });
 
         socket.on('chase_cancelled', (data) => {
-            showError(data.reason);
+            // Clear game state
+            document.querySelector('#chaseQuestion p').textContent = '';
+            document.getElementById('chaseAnswers').innerHTML = '';
+            document.getElementById('chaseStatus').textContent = 'Game Cancelled';
+            
+            // Show message
+            const questionEl = document.querySelector('#chaseQuestion p');
+            questionEl.innerHTML = `
+                <div class="text-center">
+                    <h3 class="text-xl font-bold text-red-500 mb-4">Game Cancelled</h3>
+                    <p class="text-gray-300">${data.reason || 'A player has disconnected'}</p>
+                </div>
+            `;
+            
+            playSound('game_over');
             playMusic('lobby');
             updateGameState({ game_type: 'waiting' });
         });
