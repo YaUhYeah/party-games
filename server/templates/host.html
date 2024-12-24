@@ -14,11 +14,13 @@
     <!-- DIAL Protocol Support for Fire TV -->
     <script src="https://www.amazonwebapps.com/scripts/dial.js"></script>
     <!-- AirPlay support -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-tv-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <!-- Smart TV support -->
     <link rel="manifest" href="/static/manifest.json">
     <meta name="samsung-tv-app" content="true">
+    <meta name="theme-color" content="#667eea">
     <style>
         /* TV Mode Styles */
         .tv-mode {
@@ -773,17 +775,35 @@
         </div>
     </div>
 
+    <!-- Audio Elements -->
+    <audio id="gameMusic" preload="auto" loop></audio>
+    <audio id="soundEffects" preload="auto"></audio>
+
     <script>
         // Audio setup
-        const gameAudio = document.createElement('audio');
-        gameAudio.preload = 'auto';
-        document.body.appendChild(gameAudio);
-
-        const soundEffects = document.createElement('audio');
-        soundEffects.preload = 'auto';
-        document.body.appendChild(soundEffects);
-
+        let gameMusic = null;
+        let soundEffects = null;
         let currentMusic = null;
+
+        // Initialize audio on user interaction
+        function initAudio() {
+            if (!gameMusic) {
+                gameMusic = document.getElementById('gameMusic');
+                soundEffects = document.getElementById('soundEffects');
+                
+                gameMusic.volume = 0.3;
+                soundEffects.volume = 0.5;
+
+                // Start lobby music
+                playMusic('lobby');
+                
+                // Remove initialization listener
+                document.removeEventListener('click', initAudio);
+            }
+        }
+
+        // Add initialization listener
+        document.addEventListener('click', initAudio);
 
         // Socket setup
         const socket = io();
@@ -997,19 +1017,54 @@
 
         // Audio management
         function playMusic(type) {
-            if (currentMusic !== type) {
-                gameAudio.src = `/static/music/${type}.mp3`;
-                gameAudio.loop = true;
-                gameAudio.volume = 0.5;
-                gameAudio.play();
+            if (!gameMusic || currentMusic === type) return;
+
+            try {
+                const musicPath = `/static/music/${type}.mp3`;
+                
+                // Stop current music if playing
+                if (gameMusic.src && !gameMusic.paused) {
+                    gameMusic.pause();
+                }
+                
+                // Load and play new music
+                gameMusic.src = musicPath;
+                gameMusic.load();
+                
+                const playPromise = gameMusic.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn('Music autoplay prevented:', error);
+                        // Re-add click listener to initialize audio
+                        document.addEventListener('click', initAudio);
+                    });
+                }
+                
                 currentMusic = type;
+            } catch (error) {
+                console.warn('Error playing music:', error);
             }
         }
 
         function playSound(type) {
-            const sound = new Audio(`/static/music/${type}.mp3`);
-            sound.volume = 0.6;
-            sound.play();
+            if (!soundEffects) return;
+
+            try {
+                const soundPath = `/static/sounds/${type}.mp3`;
+                
+                // Create a new audio element for each sound effect
+                const sound = new Audio(soundPath);
+                sound.volume = soundEffects.volume;
+                
+                const playPromise = sound.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn('Sound effect playback failed:', error);
+                    });
+                }
+            } catch (error) {
+                console.warn('Error playing sound:', error);
+            }
         }
 
         // Socket event handlers
@@ -1044,7 +1099,53 @@
 
         socket.on('player_joined', (data) => {
             console.log('Player joined:', data);
-            updatePlayerList(data.players);
+            
+            // Update player grid
+            const playerGrid = document.getElementById('playerGrid');
+            const emptyState = document.getElementById('emptyState');
+            const playerCount = document.getElementById('playerCount');
+            const minPlayersStatus = document.getElementById('minPlayersStatus');
+            
+            // Update player count
+            playerCount.textContent = data.players.length;
+            
+            // Show/hide empty state
+            if (data.players.length > 0) {
+                emptyState.classList.add('hidden');
+            } else {
+                emptyState.classList.remove('hidden');
+            }
+            
+            // Update min players status
+            if (data.players.length >= 2) {
+                minPlayersStatus.classList.add('text-green-500');
+                minPlayersStatus.classList.remove('text-gray-500');
+                minPlayersStatus.textContent = 'Ready to start!';
+            } else {
+                minPlayersStatus.classList.remove('text-green-500');
+                minPlayersStatus.classList.add('text-gray-500');
+                minPlayersStatus.textContent = 'Need 2+ players to start';
+            }
+            
+            // Update player grid
+            playerGrid.innerHTML = '';
+            data.players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center space-x-3 player-join';
+                playerCard.innerHTML = `
+                    <div class="flex-shrink-0">
+                        <img src="${player.avatar || '/static/images/default-avatar.png'}" 
+                             alt="${player.name}'s avatar"
+                             class="w-10 h-10 rounded-full bg-gray-200">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 truncate">${player.name}</p>
+                        <p class="text-xs text-gray-500">Joined ${new Date(player.joinTime).toLocaleTimeString()}</p>
+                    </div>
+                `;
+                playerGrid.appendChild(playerCard);
+            });
+            
             playSound('player_join');
             showToast(`${data.player_name} joined the game!`, 'success');
             updateGameControls(data.players.length);
