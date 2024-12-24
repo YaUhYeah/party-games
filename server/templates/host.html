@@ -4,23 +4,385 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Host Game - Party Games Hub</title>
+    <!-- Core styles -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    
+    <!-- Core dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
-    <script type="text/javascript" src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
-    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
-    <!-- Amazon Fire TV Support -->
-    <script src="https://resources.amazonwebapps.com/v1/latest/Amazon-Web-App-API.min.js"></script>
-    <!-- DIAL Protocol Support for Fire TV -->
-    <script src="https://www.amazonwebapps.com/scripts/dial.js"></script>
-    <!-- AirPlay support -->
+    
+    <!-- Socket.IO initialization and error handling -->
+    <script>
+        window.addEventListener('load', function() {
+            // Initialize socket with error handling
+            const socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 20000
+            });
+
+            // Socket connection events
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                document.getElementById('connectionStatus').classList.remove('text-red-500');
+                document.getElementById('connectionStatus').classList.add('text-green-500');
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Connection error:', error);
+                document.getElementById('connectionStatus').classList.remove('text-green-500');
+                document.getElementById('connectionStatus').classList.add('text-red-500');
+                document.getElementById('connectionStatus').textContent = 'Connection error: ' + error.message;
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('Disconnected:', reason);
+                document.getElementById('connectionStatus').classList.remove('text-green-500');
+                document.getElementById('connectionStatus').classList.add('text-red-500');
+                document.getElementById('connectionStatus').textContent = 'Disconnected: ' + reason;
+            });
+
+            // Make socket available globally
+            window.socket = socket;
+        });
+    </script>
+    
+    <!-- Game state management -->
+    <script>
+        // Game state object
+        const gameState = {
+            currentGame: null,
+            round: 0,
+            totalRounds: 0,
+            players: {},
+            scores: {},
+            timers: {},
+            gameStartTime: null,
+            roundStartTime: null
+        };
+
+        // Timer management
+        const timerManager = {
+            timers: {},
+            
+            startTimer: function(id, duration, onTick, onComplete) {
+                if (this.timers[id]) {
+                    clearInterval(this.timers[id].interval);
+                }
+                
+                const startTime = Date.now();
+                const timer = {
+                    startTime,
+                    duration,
+                    interval: setInterval(() => {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        const remaining = Math.max(0, duration - elapsed);
+                        
+                        if (remaining === 0) {
+                            this.stopTimer(id);
+                            if (onComplete) onComplete();
+                        } else if (onTick) {
+                            onTick(remaining);
+                        }
+                    }, 100)  // Update every 100ms for smooth countdown
+                };
+                
+                this.timers[id] = timer;
+                return timer;
+            },
+            
+            stopTimer: function(id) {
+                if (this.timers[id]) {
+                    clearInterval(this.timers[id].interval);
+                    delete this.timers[id];
+                }
+            },
+            
+            stopAll: function() {
+                Object.keys(this.timers).forEach(id => this.stopTimer(id));
+            }
+        };
+
+        // UI update functions
+        const ui = {
+            updateTimer: function(id, timeLeft) {
+                const timer = document.getElementById(id);
+                const timerBar = document.getElementById(id + 'Bar');
+                if (timer && timerBar) {
+                    timer.textContent = Math.ceil(timeLeft) + 's';
+                    const percent = (timeLeft / gameState.currentTimerDuration) * 100;
+                    timerBar.style.width = percent + '%';
+                    
+                    // Add warning colors
+                    if (timeLeft <= 5) {
+                        timerBar.classList.remove('bg-indigo-500', 'bg-yellow-500');
+                        timerBar.classList.add('bg-red-500');
+                    } else if (timeLeft <= 10) {
+                        timerBar.classList.remove('bg-indigo-500', 'bg-red-500');
+                        timerBar.classList.add('bg-yellow-500');
+                    }
+                }
+            },
+            
+            updateProgress: function(answered, total) {
+                const progress = document.getElementById('triviaProgress');
+                const progressBar = document.getElementById('triviaProgressBar');
+                if (progress && progressBar) {
+                    progress.textContent = answered + '/' + total;
+                    const percent = (answered / total) * 100;
+                    progressBar.style.width = percent + '%';
+                }
+            },
+            
+            showGameState: function(state) {
+                // Hide all game states
+                ['waitingState', 'chaseState', 'triviaState', 'drawingState'].forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.classList.add('hidden');
+                });
+                
+                // Show requested state
+                const stateElement = document.getElementById(state + 'State');
+                if (stateElement) stateElement.classList.remove('hidden');
+            },
+            
+            updateRoundInfo: function(round, total) {
+                const currentRound = document.getElementById('triviaCurrentRound');
+                const totalRounds = document.getElementById('triviaTotalRounds');
+                if (currentRound) currentRound.textContent = round;
+                if (totalRounds) totalRounds.textContent = total;
+            }
+        };
+
+        // Game initialization
+        window.addEventListener('load', function() {
+            // Initialize game UI
+            ui.showGameState('waiting');
+            
+            // Handle game start
+            socket.on('game_started', (data) => {
+                gameState.currentGame = data.game_type;
+                gameState.round = data.round;
+                gameState.totalRounds = data.total_rounds;
+                gameState.gameStartTime = Date.now();
+                
+                // Show appropriate game state
+                ui.showGameState(data.game_type);
+                
+                // Initialize game-specific UI
+                if (data.game_type === 'trivia') {
+                    initTrivia(data);
+                } else if (data.game_type === 'chase') {
+                    initChase(data);
+                }
+            });
+            
+            // Handle game errors
+            socket.on('game_error', (data) => {
+                console.error('Game error:', data.message);
+                // Show error toast
+                showToast(data.message, 'error');
+            });
+        });
+
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm font-medium shadow-lg ${
+                type === 'error' ? 'bg-red-500' : 'bg-black/80'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'transition-opacity');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+
+    <!-- Optional: TV/Casting support, load asynchronously -->
+    <script>
+        // Load TV support scripts asynchronously
+        function loadTVSupport() {
+            // Google Cast
+            const castScript = document.createElement('script');
+            castScript.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
+            castScript.async = true;
+            document.head.appendChild(castScript);
+
+            // Only load receiver if in TV mode
+            if (window.location.search.includes('tv=true')) {
+                const receiverScript = document.createElement('script');
+                receiverScript.src = 'https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js';
+                receiverScript.async = true;
+                document.head.appendChild(receiverScript);
+            }
+        }
+
+        // Load after page is ready
+        window.addEventListener('load', loadTVSupport);
+    </script>
+
+    <!-- Game initialization functions -->
+    <script>
+        // Initialize trivia game
+        function initTrivia(data) {
+            // Reset UI
+            document.getElementById('triviaQuestion').querySelector('p').textContent = data.question.question;
+            document.getElementById('triviaAnswers').innerHTML = '';
+            document.getElementById('triviaCorrectCount').textContent = '0';
+            document.getElementById('triviaFastestTime').textContent = '0.0s';
+            document.getElementById('triviaAverageTime').textContent = '0.0s';
+            
+            // Update round info
+            ui.updateRoundInfo(data.round, data.total_rounds);
+            
+            // Create answer buttons
+            const answers = data.question.answers || [];
+            answers.forEach((answer, index) => {
+                const button = document.createElement('div');
+                button.className = 'bg-gray-700 p-4 rounded-lg text-white text-center relative overflow-hidden';
+                button.innerHTML = `
+                    <span class="relative z-10">${answer}</span>
+                    <div class="absolute inset-0 bg-green-500 opacity-0 transition-all duration-300" style="width: 0%"></div>
+                `;
+                document.getElementById('triviaAnswers').appendChild(button);
+            });
+            
+            // Start timer
+            gameState.currentTimerDuration = data.time_limit;
+            timerManager.startTimer('trivia', data.time_limit,
+                (timeLeft) => {
+                    ui.updateTimer('triviaTimer', timeLeft);
+                },
+                () => {
+                    // Time's up handling
+                    socket.emit('trivia_time_up', { room_id: gameState.roomId });
+                }
+            );
+            
+            // Listen for answers
+            socket.on('answer_progress', (data) => {
+                ui.updateProgress(data.answered, data.total);
+                document.getElementById('triviaWaitingSpinner').classList.toggle('hidden', data.answered >= data.total);
+            });
+            
+            socket.on('question_results', (data) => {
+                // Update answer stats
+                document.getElementById('triviaCorrectCount').textContent = data.stats.correct_count;
+                document.getElementById('triviaFastestTime').textContent = data.stats.fastest_time.toFixed(1) + 's';
+                document.getElementById('triviaAverageTime').textContent = data.stats.average_time.toFixed(1) + 's';
+                
+                // Highlight correct answer
+                const answers = document.getElementById('triviaAnswers').children;
+                Array.from(answers).forEach((button, index) => {
+                    const progressBar = button.querySelector('.bg-green-500');
+                    const isCorrect = button.textContent.trim() === data.correct_answer;
+                    if (isCorrect) {
+                        button.classList.add('ring-2', 'ring-green-500');
+                        progressBar.classList.remove('opacity-0');
+                        progressBar.style.width = '100%';
+                    }
+                });
+            });
+        }
+
+        // Initialize chase game
+        function initChase(data) {
+            // Reset UI
+            document.getElementById('chaseBoard').innerHTML = '';
+            document.getElementById('chaserCorrect').textContent = '0';
+            document.getElementById('contestantCorrect').textContent = '0';
+            document.getElementById('chasePrize').textContent = data.prize || '0';
+            
+            // Create board squares
+            for (let i = 0; i < data.board_size; i++) {
+                const square = document.createElement('div');
+                square.className = 'bg-gray-700 aspect-square rounded-lg';
+                document.getElementById('chaseBoard').appendChild(square);
+            }
+            
+            // Update player info
+            document.getElementById('chaserName').textContent = data.chaser_name;
+            if (data.contestant_name) {
+                document.getElementById('contestantName').textContent = data.contestant_name;
+            }
+            
+            // Update power-ups
+            if (data.power_ups) {
+                document.getElementById('powerUpDoubleSteps').textContent = data.power_ups.double_steps + ' left';
+                document.getElementById('powerUpShield').textContent = data.power_ups.shield + ' left';
+                document.getElementById('powerUpTimeFreeze').textContent = data.power_ups.time_freeze + ' left';
+            }
+            
+            // Start timer if question is active
+            if (data.question) {
+                gameState.currentTimerDuration = data.time_limit;
+                timerManager.startTimer('chase', data.time_limit,
+                    (timeLeft) => {
+                        ui.updateTimer('chaseTimer', timeLeft);
+                    },
+                    () => {
+                        // Time's up handling
+                        socket.emit('chase_time_up', { room_id: gameState.roomId });
+                    }
+                );
+                
+                // Show question
+                document.getElementById('chaseQuestion').querySelector('p').textContent = data.question.question;
+                document.getElementById('chaseAnswers').innerHTML = '';
+                
+                // Create answer options
+                data.question.answers.forEach(answer => {
+                    const button = document.createElement('div');
+                    button.className = 'bg-gray-700 p-4 rounded-lg text-white text-center';
+                    button.textContent = answer;
+                    document.getElementById('chaseAnswers').appendChild(button);
+                });
+            }
+            
+            // Update positions
+            updateChasePositions(data.positions || { chaser: 0, contestant: 0 });
+            
+            // Show/hide time pressure warning
+            document.getElementById('chaseTimePressure').classList.toggle('hidden', !data.time_pressure);
+        }
+
+        // Update chase positions
+        function updateChasePositions(positions) {
+            const board = document.getElementById('chaseBoard');
+            const chaserMarker = document.getElementById('chaserMarker');
+            const contestantMarker = document.getElementById('contestantMarker');
+            
+            if (board && chaserMarker && contestantMarker) {
+                const squares = board.children;
+                if (squares.length > 0) {
+                    const squareSize = squares[0].offsetWidth;
+                    const gap = parseInt(window.getComputedStyle(board).gap) || 0;
+                    
+                    // Update chaser position
+                    const chaserX = positions.chaser * (squareSize + gap);
+                    chaserMarker.style.transform = `translateX(${chaserX}px)`;
+                    
+                    // Update contestant position
+                    const contestantX = positions.contestant * (squareSize + gap);
+                    contestantMarker.style.transform = `translateX(${contestantX}px)`;
+                }
+            }
+        }
+    </script>
+
+    <!-- PWA and mobile support -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <!-- Smart TV support -->
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="samsung-tv-app" content="true">
     <meta name="theme-color" content="#667eea">
+    
+    <!-- Web app manifest -->
+    <link rel="manifest" href="/static/manifest.json">
     <style>
         /* TV Mode Styles */
         .tv-mode {
