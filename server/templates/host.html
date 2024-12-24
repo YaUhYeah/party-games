@@ -156,16 +156,41 @@
                         <!-- Trivia Game State -->
                         <div id="triviaState" class="hidden">
                             <div class="text-center mb-6">
-                                <h3 class="text-2xl font-bold">Trivia Time</h3>
+                                <h3 class="text-2xl font-bold text-white">Trivia Time</h3>
                                 <p id="triviaRound" class="text-gray-400"></p>
                             </div>
-                            <div id="triviaQuestion" class="bg-gray-800 rounded-lg p-4 mb-4">
-                                <p class="text-lg font-medium"></p>
+                            
+                            <!-- Timer -->
+                            <div class="mb-6">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-400">Time Remaining</span>
+                                    <span id="triviaTimer" class="text-xl font-bold text-white"></span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="triviaTimerBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+                                </div>
                             </div>
+                            
+                            <!-- Question -->
+                            <div id="triviaQuestion" class="bg-gray-700 rounded-xl p-6 mb-6">
+                                <p class="text-lg font-medium text-white"></p>
+                            </div>
+                            
+                            <!-- Answer Options -->
                             <div id="triviaAnswers" class="grid grid-cols-2 gap-4">
                                 <!-- Answer stats will be shown here -->
                             </div>
-                            <div id="triviaTimer" class="text-xl font-bold text-center mt-4"></div>
+                            
+                            <!-- Progress -->
+                            <div class="mt-6">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-400">Players Answered</span>
+                                    <span id="triviaProgress" class="text-white font-medium">0/0</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div id="triviaProgressBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Drawing Game State -->
@@ -460,7 +485,23 @@
                                 document.getElementById('triviaState').classList.remove('hidden');
                                 document.getElementById('triviaRound').textContent = `Round ${data.round} of ${data.total_rounds}`;
                                 document.getElementById('triviaQuestion').querySelector('p').textContent = data.question.question;
-                                this.setupTriviaAnswers(data.question.options);
+                                // Setup trivia answers with progress bars
+                                const answersEl = document.getElementById('triviaAnswers');
+                                answersEl.innerHTML = '';
+                                data.question.options.forEach((option, index) => {
+                                    const answerDiv = document.createElement('div');
+                                    answerDiv.className = 'bg-gray-700 p-4 rounded-lg';
+                                    answerDiv.innerHTML = `
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-white">${option}</span>
+                                            <span class="answer-count bg-gray-600 px-3 py-1 rounded-full text-sm text-white">0</span>
+                                        </div>
+                                        <div class="w-full bg-gray-600 rounded-full h-1.5">
+                                            <div class="progress-bar bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                        </div>
+                                    `;
+                                    answersEl.appendChild(answerDiv);
+                                });
                                 this.startTimer(data.time_limit);
                             } else if (data.game_type === 'chinese_whispers') {
                                 document.getElementById('drawingState').classList.remove('hidden');
@@ -470,9 +511,34 @@
                         });
 
                         this.socket.on('answer_submitted', (data) => {
-                            if (this.currentGame === 'trivia') {
-                                this.updateTriviaAnswers(data);
-                            } else if (this.currentGame === 'chase') {
+                            if (data.game_type === 'trivia') {
+                                // Update answer counts
+                                const answerButtons = document.querySelectorAll('#triviaAnswers > div');
+                                data.answer_counts.forEach((count, index) => {
+                                    const countEl = answerButtons[index].querySelector('.answer-count');
+                                    countEl.textContent = count;
+                                    
+                                    // Update progress bar
+                                    const percentage = (count / data.total_players) * 100;
+                                    const progressBar = answerButtons[index].querySelector('.progress-bar');
+                                    progressBar.style.width = `${percentage}%`;
+                                });
+                                
+                                // Update overall progress
+                                const progressEl = document.getElementById('triviaProgress');
+                                const progressBar = document.getElementById('triviaProgressBar');
+                                const totalAnswered = data.answer_counts.reduce((a, b) => a + b, 0);
+                                progressEl.textContent = `${totalAnswered}/${data.total_players}`;
+                                const totalProgress = (totalAnswered / data.total_players) * 100;
+                                progressBar.style.width = `${totalProgress}%`;
+                                
+                                // If everyone has answered, move to next question after a delay
+                                if (totalAnswered === data.total_players) {
+                                    setTimeout(() => {
+                                        socket.emit('all_answered');
+                                    }, 2000);
+                                }
+                            } else if (data.game_type === 'chase') {
                                 this.updateChaseAnswers(data);
                             }
                         });
@@ -493,14 +559,41 @@
 
                     // Timer management
                     startTimer(seconds) {
-                        this.stopTimer();
-                        this.timeLeft = seconds;
-                        this.updateTimerDisplay();
-                        this.timer = setInterval(() => {
-                            this.timeLeft--;
-                            this.updateTimerDisplay();
-                            if (this.timeLeft <= 0) {
-                                this.stopTimer();
+                        if (this.timerInterval) {
+                            clearInterval(this.timerInterval);
+                        }
+
+                        let timeLeft = seconds;
+                        const totalTime = seconds;
+                        const timerEl = document.getElementById('triviaTimer');
+                        const timerBar = document.getElementById('triviaTimerBar');
+                        
+                        this.timerInterval = setInterval(() => {
+                            timerEl.textContent = timeLeft + "s";
+                            const percentage = (timeLeft / totalTime) * 100;
+                            timerBar.style.width = percentage + "%";
+                            
+                            // Change color based on time remaining
+                            if (percentage > 66) {
+                                timerBar.classList.remove("bg-yellow-500", "bg-red-500");
+                                timerBar.classList.add("bg-indigo-500");
+                            } else if (percentage > 33) {
+                                timerBar.classList.remove("bg-indigo-500", "bg-red-500");
+                                timerBar.classList.add("bg-yellow-500");
+                            } else {
+                                timerBar.classList.remove("bg-indigo-500", "bg-yellow-500");
+                                timerBar.classList.add("bg-red-500");
+                            }
+                            
+                            timeLeft--;
+
+                            if (timeLeft < 0) {
+                                clearInterval(this.timerInterval);
+                                timerEl.textContent = "Time's up!";
+                                timerBar.style.width = "0%";
+                                
+                                // Emit event to server
+                                socket.emit('timer_complete');
                             }
                         }, 1000);
                     },

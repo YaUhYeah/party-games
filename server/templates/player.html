@@ -373,50 +373,46 @@
         <div id="triviaScreen" class="hidden">
           <div class="max-w-2xl mx-auto">
             <div class="bg-white rounded-xl shadow-lg p-6">
-              <div
-                id="questionText"
-                class="text-xl font-semibold mb-6"
-              ></div>
-              <div
-                id="answerOptions"
-                class="grid grid-cols-1 gap-4"
-              >
+              <!-- Timer -->
+              <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-gray-500">Time Remaining</span>
+                  <span id="timer" class="text-xl font-bold text-indigo-600"></span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div id="timerBar" class="bg-indigo-600 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+                </div>
+              </div>
+              
+              <!-- Question -->
+              <div id="questionText" class="text-xl font-semibold mb-6 text-gray-800"></div>
+              
+              <!-- Answer Options -->
+              <div id="answerOptions" class="grid grid-cols-1 gap-4">
                 <!-- Answer buttons will be added here -->
               </div>
-              <div id="timer" class="mt-4 text-center text-2xl font-bold"></div>
-              <div id="triviaFeedback" class="mt-4 text-center hidden">
-                <div class="correct-feedback text-green-500 hidden">
-                  <svg
-                    class="w-16 h-16 mx-auto mb-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+              
+              <!-- Feedback -->
+              <div id="triviaFeedback" class="mt-6 text-center hidden">
+                <div class="correct-feedback text-green-500 hidden transform transition-all duration-300 scale-100">
+                  <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                   <p class="text-xl font-bold">Correct!</p>
                 </div>
-                <div class="wrong-feedback text-red-500 hidden">
-                  <svg
-                    class="w-16 h-16 mx-auto mb-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                <div class="wrong-feedback text-red-500 hidden transform transition-all duration-300 scale-100">
+                  <svg class="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                   </svg>
                   <p class="text-xl font-bold">Wrong!</p>
+                  <p class="text-gray-500 mt-2">The correct answer will be revealed soon...</p>
                 </div>
+              </div>
+              
+              <!-- Answer Status -->
+              <div class="mt-6 text-center text-sm text-gray-500" id="answerStatus">
+                Waiting for other players...
+                <span id="answeredCount" class="font-medium">0/0</span>
               </div>
             </div>
           </div>
@@ -1025,12 +1021,28 @@
       /****************************************
        *         GAME ACTION FUNCTIONS
        ****************************************/
-      submitAnswer(option) {
-        console.log("Submit trivia answer:", option);
-        // Example placeholder
+      submitAnswer(answer) {
+        if (this.hasAnswered) return;
+        this.hasAnswered = true;
+
+        // Disable all answer buttons
+        const buttons = document.querySelectorAll('#answerOptions button');
+        buttons.forEach(button => {
+          button.disabled = true;
+          button.classList.add('opacity-50', 'cursor-not-allowed');
+          if (button.textContent === answer) {
+            button.classList.add('bg-indigo-100', 'border-indigo-500');
+          }
+        });
+
+        // Show waiting message
+        document.getElementById('answerStatus').classList.remove('hidden');
+
+        // Emit answer to server
         this.socket.emit("submit_trivia_answer", {
           room_id: this.roomId,
-          answer: option,
+          answer: answer,
+          time_remaining: parseInt(document.getElementById("timer").textContent)
         });
       },
 
@@ -1397,21 +1409,48 @@
        *             TIMER
        ****************************************/
       startTimer(seconds) {
+        let timeLeft = seconds;
+        const timerEl = document.getElementById("timer");
+        const timerBar = document.getElementById("timerBar");
+        const totalTime = seconds;
+        this.hasAnswered = false;
+
+        // Clear any existing timer
         if (this.timerInterval) {
           clearInterval(this.timerInterval);
         }
 
-        const existingTimer = document.getElementById("timer");
-        if (!existingTimer) {
-          const gameArea = document.getElementById("gameArea");
-          const timerDiv = document.createElement("div");
-          timerDiv.id = "timer";
-          timerDiv.className =
-            "fixed top-4 left-4 bg-white p-4 rounded-lg shadow-lg text-2xl font-bold";
-          gameArea.appendChild(timerDiv);
-        }
+        // Update timer every second
+        this.timerInterval = setInterval(() => {
+          timerEl.textContent = timeLeft + "s";
+          const percentage = (timeLeft / totalTime) * 100;
+          timerBar.style.width = percentage + "%";
+          
+          // Change color based on time remaining
+          if (percentage > 66) {
+            timerBar.classList.remove("bg-yellow-500", "bg-red-500");
+            timerBar.classList.add("bg-indigo-600");
+          } else if (percentage > 33) {
+            timerBar.classList.remove("bg-indigo-600", "bg-red-500");
+            timerBar.classList.add("bg-yellow-500");
+          } else {
+            timerBar.classList.remove("bg-indigo-600", "bg-yellow-500");
+            timerBar.classList.add("bg-red-500");
+          }
+          
+          timeLeft--;
 
-        let timeLeft = seconds;
+          if (timeLeft < 0) {
+            clearInterval(this.timerInterval);
+            timerEl.textContent = "Time's up!";
+            timerBar.style.width = "0%";
+            
+            // Auto-submit if no answer was given
+            if (!this.hasAnswered) {
+              this.submitAnswer(null);
+            }
+          }
+        }, 1000);
         const updateTimer = () => {
           const timerElement = document.getElementById("timer");
           if (!timerElement) return;
