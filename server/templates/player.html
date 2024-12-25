@@ -220,7 +220,7 @@
               </p>
             </div>
 
-            <div class="profile-picture-section">
+            <div class="profile-picture-section mb-20">
               <label
                 class="block text-sm font-medium text-gray-700 mb-3"
                 >Profile Picture</label
@@ -236,15 +236,10 @@
                 ></canvas>
 
                 <div
-                  class="drawing-tools flex flex-col items-center mt-4 space-y-4"
+                  class="drawing-tools flex flex-col items-center mt-4 space-y-4 bg-white/95 p-4 rounded-lg shadow-lg"
                 >
                   <!-- Color picker -->
                   <div class="color-picker flex space-x-2">
-                    <!--
-                      NOTE: data-color is used in code to track the color.
-                      Example:
-                          <button data-color="#000000" style="background-color: #000000" ...></button>
-                    -->
                     <button
                       class="w-10 h-10 rounded-full border-2 border-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all active:scale-95"
                       data-color="#000000"
@@ -313,38 +308,40 @@
               </div>
             </div>
 
-            <button
-              id="joinButton"
-              type="button"
-              class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2"
-              onclick="window.gameState.joinGame()"
-            >
-              <span class="join-text font-semibold"
-                >Join Game</span
+            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm shadow-lg border-t border-gray-200">
+              <button
+                id="joinButton"
+                type="button"
+                class="w-full bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2 shadow-lg"
+                onclick="window.gameState.joinGame()"
               >
-              <span class="loading-spinner hidden">
-                <svg
-                  class="animate-spin h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
+                <span class="join-text font-semibold"
+                  >Join Game</span
                 >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  ></circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-              </span>
-            </button>
+                <span class="loading-spinner hidden">
+                  <svg
+                    class="animate-spin h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -135,7 +135,7 @@
                     <div class="text-center lg:col-span-1">
                         <h2 class="text-xl font-bold mb-4 text-indigo-600">Scan to Join</h2>
                         <img id="qrCode" src="{{ qr_code }}" alt="QR Code" class="mb-4 mx-auto max-w-[200px]">
-                        <p class="text-sm text-gray-600">Or join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline">{{ join_url }}</a></p>
+                        <p class="text-lg font-semibold bg-indigo-100 p-3 rounded-lg mt-2">Join at: <a href="{{ join_url }}" class="text-indigo-600 hover:underline break-all">{{ join_url }}</a></p>
                     </div>
 
                     <!-- Middle Column: Game Controls -->
@@ -161,9 +161,9 @@
                     <div class="lg:col-span-1">
                         <h2 class="text-xl font-bold mb-4 text-indigo-600">Connected Players</h2>
                         <div id="playerList" class="player-list p-4 min-h-[400px] space-y-3 bg-white/50 rounded-lg">
-                            <div class="flex items-center justify-between">
-                                <h3 class="font-medium text-gray-700">Players (<span id="playerCount">0</span>)</h3>
-                                <div class="text-sm text-gray-500" id="minPlayersStatus">
+                            <div class="flex items-center justify-between bg-indigo-50 p-3 rounded-lg">
+                                <h3 class="font-semibold text-indigo-700">Players (<span id="playerCount" class="text-xl">0</span>)</h3>
+                                <div class="text-sm font-medium text-indigo-600 bg-white px-3 py-1 rounded-full shadow-sm" id="minPlayersStatus">
                                     Need 2+ players to start
                                 </div>
                             </div>
